@@ -23,7 +23,7 @@ The brain isn't a bigger journal. Most of it (the Static Model) is expected to b
 | **Session DB** | **Firestore** (Free Tier) | Native Flutter integration. No REST API needed. |
 | **Brain DB** | **Firestore Document** (`meta/brain`) | Stores the entire `reading_brain.md` as a single string. Editable from the app without redeploys. |
 | **AI API** | 1M-token model (e.g., Gemini 1.5 Pro, Claude Sonnet) | The brain (pun intended). Dump the whole `reading_brain.md`. |
-| **Auth (Optional)** | Firebase Auth (Anonymous) | Optional. Skip it for now — open Firestore security rules for personal use. |
+| **Auth** | Firebase Auth (Google Sign-In) | Single-user gate. One-click Google sign-in, email whitelist (`wikansetiaji@gmail.com` only), session persists. Free Spark plan. |
 
 ---
 
@@ -696,12 +696,13 @@ dependencies:
 ## 🛠️ Development Roadmap
 
 ### Phase 1: MVP (Week 1)
-- [ ] Firebase project setup → enable Firestore + Hosting.
-- [ ] Flutter project init with `firebase_core` + `cloud_firestore`.
-- [ ] Upload your `reading_brain.md` as `meta/brain`.
-- [ ] Build chat UI (TextField + ListView for messages).
-- [ ] Implement API call to 1M-token LLM.
-- [ ] Construct prompt: Companion System Prompt + brain + chat history + query.
+- [x] Firebase project setup → enable Firestore + Hosting.
+- [x] Flutter project init with `firebase_core` + `cloud_firestore`.
+- [x] Upload your `reading_brain.md` as `meta/brain`.
+- [x] Build chat UI (TextField + ListView for messages).
+- [x] Implement API call to 1M-token LLM.
+- [x] Construct prompt: Companion System Prompt + brain + chat history + query.
+- [x] Firebase Auth (Email/Password) — single-user login gate.
 
 ### Phase 2: Persistence (Week 2)
 - [ ] Save messages to Firestore (`sessions` collection).

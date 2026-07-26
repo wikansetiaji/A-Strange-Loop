@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 import 'package:a_strange_loop/providers/chat_state.dart';
@@ -80,6 +81,13 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       centerTitle: false,
       titleSpacing: 16,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.logout, size: 20),
+          tooltip: 'Sign out',
+          onPressed: () => FirebaseAuth.instance.signOut(),
+        ),
+      ],
     );
   }
 

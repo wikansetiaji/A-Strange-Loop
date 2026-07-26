@@ -273,7 +273,6 @@ UI rebuilds, shows the new messages
 - Block parsing (BEGIN_APPEND_BOOK, BEGIN_PATCH, etc.) — Phase 3
 - Brain editing UI (Phase 3)
 - "New Chat" button (Phase 2)
-- Auth (deferred per tech plan — personal use)
 - Firebase Hosting deploy (Phase 4)
 - Multiple chats/sessions (Phase 2)
 - Observation system (companion will emit raw blocks — Phase 3 parses them)
@@ -360,3 +359,18 @@ If all four are "yes" → proceed to Phase 2.
 ### 5. Witty AI Personality
 - `system_prompt.dart`: Updated PERSONALITY & TONE section — warm curiosity as default, cleverness as baseline, combativeness as rare spice (~10%)
 - Builds on responses, teases patterns lightly, feels like a sharp friend not a coach
+
+### 6. Firebase Auth — Google Sign-In
+
+**Date added:** 2026-07-26
+
+- `pubspec.yaml`: Added `firebase_auth: ^5.0.0`
+- `lib/screens/login_screen.dart`: "Sign in with Google" button using `signInWithPopup()`. After sign-in, email is checked against `wikansetiaji@gmail.com` — any other account is immediately signed out.
+- `lib/main.dart`: `StreamBuilder<User?>` on `authStateChanges()` gates between `LoginScreen` and `ChatScreen`
+- `lib/screens/chat_screen.dart`: Sign-out icon button in AppBar
+
+**Setup required (Firebase Console):**
+1. Go to https://console.firebase.google.com/project/a-strange-loop/authentication/providers
+2. Click **Google** → toggle **Enable** → pick your email as support email → **Save**
+
+That's it. No user creation — first sign-in auto-registers.
