@@ -370,31 +370,3 @@ Why It Matters:
 Loved the atmosphere.
 
 Wanted the premise to remain the protagonist.
-
----
-
-# BOOK
-
-Title:
-
-The Glass Bead Game
-
-Status:
-
-Reading
-
-Progress:
-
-15%
-
-Current Impression:
-
-Quiet.
-
-Difficult to identify the correct reading mode.
-
-Reading Strategy:
-
-Dreamy flow.
-
-Still ask questions.
