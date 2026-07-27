@@ -45,6 +45,55 @@ class AIService {
     return choices[0]['message']['content'] as String;
   }
 
+  Future<String?> generateTitle(
+      String firstUserMsg, String firstAssistantMsg) async {
+    try {
+      final request = http.Request('POST', Uri.parse(deepseekApiEndpoint));
+      request.headers.addAll({
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $deepseekApiKey',
+      });
+      request.body = jsonEncode({
+        'model': deepseekModel,
+        'messages': [
+          {
+            'role': 'system',
+            'content': 'Generate a short title (max 6 words) for this '
+                'conversation. Output ONLY the title, no quotes, no '
+                'punctuation, no explanation.'
+          },
+          {
+            'role': 'user',
+            'content': 'User: $firstUserMsg\n\nAssistant: $firstAssistantMsg',
+          },
+        ],
+        'max_tokens': 256,
+        'temperature': 0.3,
+        'stream': false,
+      });
+
+      final response = await _client.send(request);
+      if (response.statusCode != 200) return null;
+
+      final body = await response.stream.bytesToString();
+      final json = jsonDecode(body) as Map<String, dynamic>;
+      final choices = json['choices'] as List;
+      final message = choices[0]['message'] as Map<String, dynamic>;
+
+      String? title = (message['content'] as String?)?.trim();
+      if (title == null || title.isEmpty) {
+        title = (message['reasoning_content'] as String?)?.trim();
+      }
+      if (title != null && title.isNotEmpty) {
+        final lastLine = title.split('\n').last.trim();
+        return lastLine;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Stream<String> sendMessageStream(String prompt) async* {
     final request = http.Request('POST', Uri.parse(deepseekApiEndpoint));
     request.headers.addAll({

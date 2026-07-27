@@ -704,10 +704,20 @@ dependencies:
 - [x] Construct prompt: Companion System Prompt + brain + chat history + query.
 - [x] Firebase Auth (Email/Password) — single-user login gate.
 
-### Phase 2: Persistence (Week 2)
-- [ ] Save messages to Firestore (`sessions` collection).
-- [ ] Load most recent session on app startup.
-- [ ] Add "New Chat" button.
+### Phase 2: Multi-Session Persistence (Week 2) ✅
+See [`phase2_plan.md`](./phase2_plan.md) for full details.
+
+- [x] Data model: `sessions/{id}` + `sessions/{id}/messages/` subcollection
+- [x] Save/load messages to/from Firestore (lazy — created on first message)
+- [x] Adaptive sidebar (persistent on desktop >=840px, drawer on mobile)
+- [x] Auto-generate session titles via model API (after first assistant response)
+- [x] Search sessions by title (Firestore prefix query, 300ms debounce)
+- [x] Pin sessions (pinned sort first, client-side sort)
+- [x] Delete sessions (batch subcollection delete with confirmation dialog)
+- [x] "New Chat" button with empty-session auto-clean (no Firestore write)
+- [x] Auto-load most recent session on app startup (or create empty local session)
+- [x] Persist token counts and compression state per session
+- [x] Brain preview (Markdown viewer dialog, accessible from sidebar)
 
 ### Phase 3: Multi-block CRUD + Patching (Week 3)
 - [ ] Implement a block scanner that finds *all* operation blocks in one response, not just the first.

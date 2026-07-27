@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:a_strange_loop/models/message.dart';
+import 'package:a_strange_loop/models/session.dart';
 import 'package:a_strange_loop/services/firestore_service.dart';
 import 'package:a_strange_loop/services/ai_service.dart';
 import 'package:a_strange_loop/constants/system_prompt.dart';
@@ -11,9 +13,8 @@ class ChatState extends ChangeNotifier {
   final FirestoreService _firestore = FirestoreService();
   final AIService _ai = AIService();
 
-  final String sessionId = DateTime.now()
-      .millisecondsSinceEpoch
-      .toString();
+  String? currentSessionId;
+  List<Session> sessions = [];
 
   List<Message> messages = [];
   String? streamingContent;
@@ -36,6 +37,13 @@ class ChatState extends ChangeNotifier {
   DateTime? _brainFetchedAt;
   DateTime _lastNotify = DateTime.now();
 
+  String? get brainContent => _brainCache;
+
+  Future<String> loadBrain() async => _getBrain();
+
+  Timer? _searchDebounce;
+  bool isSearching = false;
+
   Future<void> seedBrainIfNeeded() async {
     try {
       await _firestore.getBrain();
@@ -45,8 +53,127 @@ class ChatState extends ChangeNotifier {
     }
   }
 
+  // ── Session lifecycle ─────────────────────────────────────────
+
+  Future<void> initializeSessions() async {
+    final loaded = await _firestore.loadSessions();
+    sessions = loaded;
+    if (sessions.isNotEmpty) {
+      await switchSession(sessions.first.id);
+    } else {
+      _createNewSessionId();
+      sessions = [_currentSessionMeta()];
+      notifyListeners();
+    }
+  }
+
+  Future<void> fallbackToEmptySession() async {
+    _createNewSessionId();
+    messages = [];
+    sessions = [_currentSessionMeta()];
+    notifyListeners();
+  }
+
+  Future<void> createNewSession() async {
+    if (currentSessionId != null &&
+        _currentSessionMeta().messageCount == 0) {
+      sessions.removeWhere((s) => s.id == currentSessionId);
+    }
+
+    _saveCurrentSessionState();
+    _resetSessionState();
+    _createNewSessionId();
+    sessions.insert(0, _currentSessionMeta());
+    notifyListeners();
+  }
+
+  Future<void> switchSession(String sessionId) async {
+    if (sessionId == currentSessionId) return;
+
+    _saveCurrentSessionState();
+
+    final messagesDocs = await _firestore.loadMessages(sessionId);
+    final target = sessions.firstWhere((s) => s.id == sessionId);
+
+    currentSessionId = sessionId;
+    messages = messagesDocs;
+    sessionPromptTokens = target.promptTokens;
+    sessionCompletionTokens = target.completionTokens;
+    _conversationSummary = target.conversationSummary;
+    _lastSummarizedIndex = target.lastSummarizedIndex;
+    streamingContent = null;
+    error = null;
+    notifyListeners();
+  }
+
+  Future<void> deleteSession(String sessionId) async {
+    await _firestore.deleteSession(sessionId);
+    sessions.removeWhere((s) => s.id == sessionId);
+
+    if (currentSessionId == sessionId) {
+      if (sessions.isNotEmpty) {
+        await switchSession(sessions.first.id);
+      } else {
+        _resetSessionState();
+        _createNewSessionId();
+        sessions.add(_currentSessionMeta());
+        notifyListeners();
+      }
+    } else {
+      notifyListeners();
+    }
+  }
+
+  Future<void> pinSession(String sessionId) async {
+    final idx = sessions.indexWhere((s) => s.id == sessionId);
+    if (idx == -1) return;
+
+    final session = sessions[idx];
+    final newPinned = !session.pinned;
+    await _firestore.pinSession(sessionId, newPinned);
+
+    sessions[idx] = session.copyWith(pinned: newPinned);
+    _sortSessions();
+    notifyListeners();
+  }
+
+  // ── Search ────────────────────────────────────────────────────
+
+  void searchSessions(String query) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      if (query.isEmpty) {
+        sessions = await _firestore.loadSessions();
+      } else {
+        final results = await _firestore.searchSessionsByTitle(query);
+        sessions = results;
+      }
+      isSearching = query.isNotEmpty;
+      notifyListeners();
+    });
+  }
+
+  void clearSearch() {
+    _searchDebounce?.cancel();
+    isSearching = false;
+    loadSessions();
+  }
+
+  Future<void> loadSessions() async {
+    sessions = await _firestore.loadSessions();
+    notifyListeners();
+  }
+
+  // ── Messaging ─────────────────────────────────────────────────
+
   Future<void> sendMessage(String text) async {
-    final userMsg = Message(role: 'user', content: text);
+    assert(currentSessionId != null, 'No active session');
+
+    final userMsg = Message(
+      role: 'user',
+      content: text,
+      order: messages.length,
+    );
     messages.add(userMsg);
     streamingContent = '';
     error = null;
@@ -76,14 +203,16 @@ class ChatState extends ChangeNotifier {
       }
 
       final content = buffer.toString();
-      final assistantMsg = Message(role: 'assistant', content: content);
+      final assistantMsg = Message(
+        role: 'assistant',
+        content: content,
+        order: messages.length,
+      );
       messages.add(assistantMsg);
       streamingContent = null;
       isLoading = false;
 
-      await _firestore.saveSessionStats(
-          sessionId, sessionPromptTokens, sessionCompletionTokens);
-
+      await _persistAfterResponse(userMsg, assistantMsg);
       notifyListeners();
     } catch (e) {
       streamingContent = null;
@@ -100,6 +229,50 @@ class ChatState extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<void> _persistAfterResponse(
+      Message userMsg, Message assistantMsg) async {
+    final sid = currentSessionId!;
+
+    await _firestore.saveMessage(sid, userMsg);
+    await _firestore.saveMessage(sid, assistantMsg);
+
+    final meta = _currentSessionMeta();
+    await _firestore.updateSessionMeta(sid, meta.toMap());
+
+    final idx = sessions.indexWhere((s) => s.id == sid);
+    if (idx != -1) {
+      sessions[idx] = meta;
+    } else {
+      sessions.insert(0, meta);
+    }
+    _sortSessions();
+
+    final wasFirstExchange = messages.length == 2 && meta.title == null;
+    if (wasFirstExchange) {
+      _generateTitle(messages[0].content, messages[1].content);
+    }
+  }
+
+  Future<void> _generateTitle(
+      String firstUserMsg, String firstAssistantMsg) async {
+    final title = await _ai.generateTitle(firstUserMsg, firstAssistantMsg);
+    if (title == null) return;
+
+    final sid = currentSessionId!;
+    await _firestore.updateSessionMeta(sid, {'title': title});
+
+    final idx = sessions.indexWhere((s) => s.id == sid);
+    if (idx != -1) {
+      sessions[idx] = sessions[idx].copyWith(title: title);
+    } else {
+      sessions.insert(0, _currentSessionMeta());
+    }
+    _sortSessions();
+    notifyListeners();
+  }
+
+  // ── Compression ───────────────────────────────────────────────
 
   Future<List<Message>> _maybeCompress(String brain) async {
     final fullPrompt = _buildPrompt(brain, messages);
@@ -150,6 +323,8 @@ class ChatState extends ChangeNotifier {
     ];
   }
 
+  // ── Brain ─────────────────────────────────────────────────────
+
   Future<String> _getBrain() async {
     if (_brainCache != null && _brainFetchedAt != null) {
       return _brainCache!;
@@ -199,6 +374,8 @@ class ChatState extends ChangeNotifier {
         '## Chat History\n\n$history';
   }
 
+  // ── Helpers ───────────────────────────────────────────────────
+
   String get formattedSessionTokens {
     final total = sessionPromptTokens + sessionCompletionTokens;
     if (total >= 1000) {
@@ -210,5 +387,66 @@ class ChatState extends ChangeNotifier {
   void clearError() {
     error = null;
     notifyListeners();
+  }
+
+  void _createNewSessionId() {
+    currentSessionId = DateTime.now().millisecondsSinceEpoch.toString();
+  }
+
+  Session _currentSessionMeta() {
+    final lastMsg = messages.isNotEmpty ? messages.last : null;
+    return Session(
+      id: currentSessionId!,
+      title: sessions
+          .where((s) => s.id == currentSessionId)
+          .map((s) => s.title)
+          .firstOrNull,
+      pinned: sessions
+          .where((s) => s.id == currentSessionId)
+          .map((s) => s.pinned)
+          .firstOrNull ??
+          false,
+      lastMessage: lastMsg != null
+          ? (lastMsg.content.length > 100
+              ? '${lastMsg.content.substring(0, 100)}...'
+              : lastMsg.content)
+          : '',
+      createdAt: sessions
+              .where((s) => s.id == currentSessionId)
+              .map((s) => s.createdAt)
+              .firstOrNull ??
+          DateTime.now(),
+      updatedAt: DateTime.now(),
+      promptTokens: sessionPromptTokens,
+      completionTokens: sessionCompletionTokens,
+      messageCount: messages.length,
+      conversationSummary: _conversationSummary,
+      lastSummarizedIndex: _lastSummarizedIndex,
+    );
+  }
+
+  void _saveCurrentSessionState() {
+    if (currentSessionId == null) return;
+    final idx = sessions.indexWhere((s) => s.id == currentSessionId);
+    if (idx == -1) return;
+    sessions[idx] = _currentSessionMeta();
+  }
+
+  void _resetSessionState() {
+    messages = [];
+    sessionPromptTokens = 0;
+    sessionCompletionTokens = 0;
+    _conversationSummary = null;
+    _lastSummarizedIndex = 0;
+    streamingContent = null;
+    isLoading = false;
+    error = null;
+  }
+
+  void _sortSessions() {
+    sessions.sort((a, b) {
+      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
   }
 }

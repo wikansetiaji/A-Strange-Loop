@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 import 'package:a_strange_loop/providers/chat_state.dart';
+import 'package:a_strange_loop/widgets/sidebar.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -16,6 +17,33 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    final cs = context.read<ChatState>();
+    try {
+      await cs.initializeSessions();
+    } catch (_) {
+      // ignore: avoid_print
+      print('Failed to initialize sessions, starting fresh');
+      try {
+        await cs.fallbackToEmptySession();
+      } catch (_) {
+        // ignore: avoid_print
+        print('Failed to create fallback session');
+      }
+    }
+    if (mounted) {
+      setState(() => _initialized = true);
+    }
+  }
 
   @override
   void dispose() {
@@ -35,27 +63,43 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: _buildAppBar(),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 768),
-          child: Column(
-            children: [
-              Expanded(child: _buildMessageList()),
-              _buildErrorBanner(),
-              _buildTokenFooter(),
-              _buildInputBar(),
-            ],
-          ),
+    if (!_initialized) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final isWide = MediaQuery.of(context).size.width >= 840;
+
+    if (isWide) {
+      return Scaffold(
+        body: Row(
+          children: [
+            const Sidebar(width: 300),
+            const VerticalDivider(width: 1),
+            Expanded(child: _buildChatArea()),
+          ],
         ),
-      ),
+      );
+    }
+
+    return Scaffold(
+      key: _scaffoldKey,
+      appBar: _buildAppBar(),
+      drawer: const Sidebar(),
+      body: _buildChatArea(),
     );
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final isWide = MediaQuery.of(context).size.width >= 840;
     return AppBar(
+      leading: isWide
+          ? null
+          : IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+            ),
       title: Consumer<ChatState>(
         builder: (context, state, _) {
           return Column(
@@ -67,7 +111,7 @@ class _ChatScreenState extends State<ChatScreen> {
               if (state.currentBookTitle != null)
                 Text(
                   'Reading: ${state.currentBookTitle}'
-                  '${state.currentBookProgress != null ? ' · ${state.currentBookProgress}' : ''}',
+                  '${state.currentBookProgress != null ? ' \u00b7 ${state.currentBookProgress}' : ''}',
                   style: TextStyle(
                       fontSize: 11,
                       color: Theme.of(context)
@@ -80,14 +124,39 @@ class _ChatScreenState extends State<ChatScreen> {
         },
       ),
       centerTitle: false,
-      titleSpacing: 16,
+      titleSpacing: isWide ? 16 : 0,
       actions: [
+        if (!isWide)
+          IconButton(
+            icon: const Icon(Icons.edit_square, size: 20),
+            tooltip: 'New Chat',
+            onPressed: () {
+              _scaffoldKey.currentState?.closeDrawer();
+              context.read<ChatState>().createNewSession();
+            },
+          ),
         IconButton(
           icon: const Icon(Icons.logout, size: 20),
           tooltip: 'Sign out',
           onPressed: () => FirebaseAuth.instance.signOut(),
         ),
       ],
+    );
+  }
+
+  Widget _buildChatArea() {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 768),
+        child: Column(
+          children: [
+            Expanded(child: _buildMessageList()),
+            _buildErrorBanner(),
+            _buildTokenFooter(),
+            _buildInputBar(),
+          ],
+        ),
+      ),
     );
   }
 
@@ -286,7 +355,7 @@ class _ChatScreenState extends State<ChatScreen> {
           padding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Text(
-            '${state.messages.length} messages$suffix · ${state.formattedSessionTokens}',
+            '${state.messages.length} messages$suffix \u00b7 ${state.formattedSessionTokens}',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 11,
@@ -324,7 +393,6 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildInputBar() {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      
       child: Row(
         children: [
           Expanded(
