@@ -240,26 +240,36 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildTypingIndicator() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
-      child: Row(
-        children: [
-          Container(
-            width: 3,
-            decoration: BoxDecoration(
-              color: Theme.of(context)
-                  .colorScheme
-                  .primary
-                  .withAlpha(60),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text('Thinking...',
-              style: TextStyle(
-                fontSize: 14,
-                color: Theme.of(context).colorScheme.onSurface.withAlpha(120),
-                fontStyle: FontStyle.italic,
-              )),
-        ],
+      child: Consumer<ChatState>(
+        builder: (context, state, _) {
+          final label = state.isCompressing
+              ? 'Compressing conversation history...'
+              : 'Thinking...';
+          return Row(
+            children: [
+              Container(
+                width: 3,
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withAlpha(60),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withAlpha(120),
+                    fontStyle: FontStyle.italic,
+                  )),
+            ],
+          );
+        },
       ),
     );
   }
@@ -269,12 +279,14 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (context, state, _) {
         if (state.messages.isEmpty) return const SizedBox.shrink();
 
+        final suffix = state.isSummaryActive ? ' (summarized)' : '';
+
         return Container(
           width: double.infinity,
           padding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Text(
-            '${state.messages.length} messages · ${state.formattedSessionTokens}',
+            '${state.messages.length} messages$suffix · ${state.formattedSessionTokens}',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 11,

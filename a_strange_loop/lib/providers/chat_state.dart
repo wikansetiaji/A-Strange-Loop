@@ -4,6 +4,8 @@ import 'package:a_strange_loop/models/message.dart';
 import 'package:a_strange_loop/services/firestore_service.dart';
 import 'package:a_strange_loop/services/ai_service.dart';
 import 'package:a_strange_loop/constants/system_prompt.dart';
+import 'package:a_strange_loop/constants/api_config.dart';
+import 'package:a_strange_loop/utils/token_counter.dart';
 
 class ChatState extends ChangeNotifier {
   final FirestoreService _firestore = FirestoreService();
@@ -20,6 +22,12 @@ class ChatState extends ChangeNotifier {
 
   int sessionPromptTokens = 0;
   int sessionCompletionTokens = 0;
+
+  String? _conversationSummary;
+  int _lastSummarizedIndex = 0;
+  bool isCompressing = false;
+
+  bool get isSummaryActive => _conversationSummary != null;
 
   String? currentBookTitle;
   String? currentBookProgress;
@@ -48,7 +56,8 @@ class ChatState extends ChangeNotifier {
     try {
       final brain = await _getBrain();
 
-      final prompt = _buildPrompt(brain, messages);
+      final compressed = await _maybeCompress(brain);
+      final prompt = _buildPrompt(brain, compressed);
 
       final buffer = StringBuffer();
 
@@ -92,6 +101,55 @@ class ChatState extends ChangeNotifier {
     }
   }
 
+  Future<List<Message>> _maybeCompress(String brain) async {
+    final fullPrompt = _buildPrompt(brain, messages);
+    final totalTokens = TokenCounter.count(fullPrompt);
+
+    if (totalTokens <= maxInputTokens) {
+      return messages;
+    }
+
+    final cutOff = (messages.length - keepRecentMessages)
+        .clamp(0, messages.length);
+
+    if (_lastSummarizedIndex >= cutOff && _conversationSummary != null) {
+      return [
+        Message(role: 'system', content: _conversationSummary!),
+        ...messages.sublist(cutOff),
+      ];
+    }
+
+    isCompressing = true;
+    notifyListeners();
+
+    try {
+      final newMessages = messages.sublist(_lastSummarizedIndex, cutOff);
+      final newText = newMessages
+          .map((m) =>
+              '${m.role == 'user' ? 'User' : 'Assistant'}: ${m.content}')
+          .join('\n\n');
+
+      final textToSummarize = _conversationSummary != null
+          ? 'Existing summary:\n$_conversationSummary\n\n'
+              'New messages to add:\n$newText'
+          : newText;
+
+      _conversationSummary = await _ai.summarize(textToSummarize);
+      _lastSummarizedIndex = cutOff;
+    } catch (_) {
+      _conversationSummary = null;
+      _lastSummarizedIndex = cutOff;
+    } finally {
+      isCompressing = false;
+    }
+
+    return [
+      if (_conversationSummary != null)
+        Message(role: 'system', content: _conversationSummary!),
+      ...messages.sublist(cutOff),
+    ];
+  }
+
   Future<String> _getBrain() async {
     if (_brainCache != null && _brainFetchedAt != null) {
       return _brainCache!;
@@ -124,10 +182,18 @@ class ChatState extends ChangeNotifier {
   }
 
   String _buildPrompt(String brain, List<Message> msgs) {
-    final history = msgs
-        .map((m) =>
-            '${m.role == 'user' ? 'User' : 'Assistant'}: ${m.content}')
-        .join('\n\n');
+    final historyParts = <String>[];
+
+    for (final m in msgs) {
+      if (m.role == 'system') {
+        historyParts.add('## Conversation Summary\n\n${m.content}');
+      } else {
+        historyParts.add(
+            '${m.role == 'user' ? 'User' : 'Assistant'}: ${m.content}');
+      }
+    }
+
+    final history = historyParts.join('\n\n');
 
     return '$companionSystemPrompt\n\n---\n\n$brain\n\n---\n\n'
         '## Chat History\n\n$history';

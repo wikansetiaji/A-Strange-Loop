@@ -6,6 +6,45 @@ import 'package:a_strange_loop/constants/api_config.dart';
 class AIService {
   final http.Client _client = http.Client();
 
+  Future<String> summarize(String textToSummarize) async {
+    final request = http.Request('POST', Uri.parse(deepseekApiEndpoint));
+    request.headers.addAll({
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $deepseekApiKey',
+    });
+    request.body = jsonEncode({
+      'model': deepseekModel,
+      'messages': [
+        {
+          'role': 'system',
+          'content': 'Summarize the following conversation concisely. '
+              'Preserve:\n'
+              '- Books discussed (titles, authors, key details)\n'
+              '- Reading recommendations given or considered\n'
+              "- User's expressed preferences, opinions, or shifts in taste\n"
+              '- Key decisions or conclusions\n'
+              '- Active questions or ongoing threads\n'
+              'Output only the summary, no preamble.'
+        },
+        {'role': 'user', 'content': textToSummarize},
+      ],
+      'temperature': 0.3,
+      'max_tokens': 2048,
+      'stream': false,
+    });
+
+    final response = await _client.send(request);
+    if (response.statusCode != 200) {
+      final body = await response.stream.bytesToString();
+      throw Exception('Summarization error ${response.statusCode}: $body');
+    }
+
+    final body = await response.stream.bytesToString();
+    final json = jsonDecode(body) as Map<String, dynamic>;
+    final choices = json['choices'] as List;
+    return choices[0]['message']['content'] as String;
+  }
+
   Stream<String> sendMessageStream(String prompt) async* {
     final request = http.Request('POST', Uri.parse(deepseekApiEndpoint));
     request.headers.addAll({
