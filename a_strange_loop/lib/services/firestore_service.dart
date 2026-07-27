@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:a_strange_loop/models/session.dart';
 import 'package:a_strange_loop/models/message.dart';
+import 'package:a_strange_loop/services/brain_parser.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -25,6 +26,28 @@ class FirestoreService {
   int _countBooks(String markdown) {
     final matches = RegExp(r'^# BOOK$', multiLine: true).allMatches(markdown);
     return matches.length;
+  }
+
+  Future<void> updateBrain(
+      String markdownContent, List<PatchLogEntry> patchLog) async {
+    final brainRef = _firestore.collection('meta').doc('brain');
+    final batch = _firestore.batch();
+
+    batch.set(brainRef, {
+      'markdown_content': markdownContent,
+      'updated_at': FieldValue.serverTimestamp(),
+      'book_count': _countBooks(markdownContent),
+    }, SetOptions(merge: true));
+
+    for (final entry in patchLog) {
+      final docRef = brainRef.collection('patch_log').doc();
+      batch.set(docRef, {
+        ...entry.toMap(),
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
   }
 
   // ── Session CRUD ──────────────────────────────────────────────

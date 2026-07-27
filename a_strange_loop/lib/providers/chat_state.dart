@@ -5,6 +5,7 @@ import 'package:a_strange_loop/models/message.dart';
 import 'package:a_strange_loop/models/session.dart';
 import 'package:a_strange_loop/services/firestore_service.dart';
 import 'package:a_strange_loop/services/ai_service.dart';
+import 'package:a_strange_loop/services/brain_parser.dart';
 import 'package:a_strange_loop/constants/system_prompt.dart';
 import 'package:a_strange_loop/constants/api_config.dart';
 import 'package:a_strange_loop/utils/token_counter.dart';
@@ -187,6 +188,9 @@ class ChatState extends ChangeNotifier {
       final prompt = _buildPrompt(brain, compressed);
 
       final buffer = StringBuffer();
+      bool blocksDetected = false;
+      final blockBuffer = StringBuffer();
+      String visibleBuffer = '';
 
       await for (final chunk in _ai.sendMessageStream(prompt)) {
         if (chunk.startsWith('[USAGE:')) {
@@ -197,15 +201,38 @@ class ChatState extends ChangeNotifier {
           sessionCompletionTokens += int.parse(parts[1]);
         } else {
           buffer.write(chunk);
-          streamingContent = buffer.toString();
+
+          if (blocksDetected) {
+            blockBuffer.write(chunk);
+            continue;
+          }
+
+          final combined = visibleBuffer + chunk;
+          final markerIdx = _findBlockMarker(combined);
+          if (markerIdx != -1) {
+            visibleBuffer = combined.substring(0, markerIdx);
+            final remaining = combined.substring(markerIdx);
+            blockBuffer.write(remaining);
+            blocksDetected = true;
+          } else {
+            visibleBuffer = combined;
+          }
+
+          streamingContent = visibleBuffer;
           _throttledNotify();
         }
       }
 
-      final content = buffer.toString();
+      final fullContent = buffer.toString();
+      final isBlockResponse =
+          blocksDetected && _containsBlockMarker(fullContent);
+      final parsed =
+          isBlockResponse ? BrainParser.parse(fullContent) : null;
+      final prose = parsed?.prose ?? fullContent;
+
       final assistantMsg = Message(
         role: 'assistant',
-        content: content,
+        content: prose,
         order: messages.length,
       );
       messages.add(assistantMsg);
@@ -213,6 +240,21 @@ class ChatState extends ChangeNotifier {
       isLoading = false;
 
       await _persistAfterResponse(userMsg, assistantMsg);
+
+      if (parsed != null && parsed.blocks.isNotEmpty) {
+        try {
+          final freshBrain = await _firestore.getBrain();
+          final update =
+              BrainParser.applyBlocks(freshBrain, parsed.blocks);
+          await _firestore.updateBrain(update.brain, update.log);
+          _brainCache = update.brain;
+          _brainFetchedAt = DateTime.now();
+          _parseCurrentReading(update.brain);
+        } catch (e) {
+          debugPrint('BrainParser error: $e');
+        }
+      }
+
       notifyListeners();
     } catch (e) {
       streamingContent = null;
@@ -221,6 +263,26 @@ class ChatState extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  static int _findBlockMarker(String text) {
+    const markers = [
+      'BEGIN_APPEND_BOOK',
+      'BEGIN_UPDATE_BOOK',
+      'BEGIN_DELETE_BOOK',
+      'BEGIN_PATCH',
+      'BEGIN_OBSERVATION',
+    ];
+    for (final marker in markers) {
+      final idx = text.length >= marker.length
+          ? text.indexOf(marker)
+          : -1;
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  }
+
+  static bool _containsBlockMarker(String text) =>
+      _findBlockMarker(text) != -1;
 
   void _throttledNotify() {
     final now = DateTime.now();
