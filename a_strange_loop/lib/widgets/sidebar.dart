@@ -38,6 +38,17 @@ class _SidebarState extends State<Sidebar> {
       color: colorScheme.surfaceContainerLow,
       child: Column(
         children: [
+           Padding(
+             padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+             child: SizedBox(
+               width: double.infinity,
+               child: Text('A Strange Loop',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.onSurface)),
+             ),
+           ),
           _buildNewChatButton(context, cs),
           _buildSearchField(context, colorScheme, cs),
           _buildBrainButton(context, colorScheme, cs),
