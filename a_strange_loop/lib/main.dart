@@ -6,6 +6,8 @@ import 'package:a_strange_loop/firebase_options.dart';
 import 'package:a_strange_loop/providers/chat_state.dart';
 import 'package:a_strange_loop/screens/chat_screen.dart';
 import 'package:a_strange_loop/screens/login_screen.dart';
+import 'package:a_strange_loop/theme/app_theme.dart';
+import 'package:a_strange_loop/widgets/animations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,27 +42,20 @@ class ASLApp extends StatelessWidget {
       child: MaterialApp(
         title: 'A Strange Loop',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF6C63FF),
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true,
-        ),
-        darkTheme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF6C63FF),
-            brightness: Brightness.dark,
-          ),
-          useMaterial3: true,
-        ),
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
         themeMode: ThemeMode.system,
         home: StreamBuilder<User?>(
           stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
+              return Scaffold(
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                body: Center(
+                  child: BlockLoader(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
               );
             }
             if (snapshot.hasData) {
@@ -83,6 +78,7 @@ class ErrorApp extends StatelessWidget {
     return MaterialApp(
       title: 'A Strange Loop',
       debugShowCheckedModeBanner: false,
+      theme: AppTheme.light(),
       home: Scaffold(
         body: Center(
           child: Padding(

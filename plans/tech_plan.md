@@ -737,6 +737,19 @@ flutter build web
 firebase deploy --only hosting
 ```
 
+### Phase 5: Visual Redesign — "The Strange Loop Library" ✅
+
+See [`phase5_plan.md`](./phase5_plan.md) for full details.
+
+- [x] Complete design system (`lib/theme/app_theme.dart`) — custom ColorScheme, TextTheme with Syne + Space Grotesk, component themes
+- [x] Animated components library (`lib/widgets/animations.dart`) — 8 custom widgets (PulsingLoop, TypingBubble, FloatingDust, StaggeredEntrance, AnimatedMessageEntrance, MorphingSendButton, BlockLoader, BrainGlow)
+- [x] Redesigned login screen — bordered layout, PulsingLoop logo, all-caps typography, FloatingDust atmosphere
+- [x] Redesigned chat screen — custom header visible on all screen sizes, red accent bar on AI messages, bordered user bubbles, TypingBubble indicator, MorphingSendButton, "Ask me anything, friend..." input
+- [x] Redesigned sidebar — sharp borders, all-caps labels, staggered entrance animations, cleaned-up reading brain button
+- [x] Redesigned session tiles — sharp icons, red active indicator bar
+- [x] Platform consistency — zero border radius, sharp Material icons, BlockLoader replacing all CircularProgressIndicator
+- [x] Added `google_fonts` dependency for Syne + Space Grotesk typography
+
 ---
 
 ## ✅ Free Tier Verification

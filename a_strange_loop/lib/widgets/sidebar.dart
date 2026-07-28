@@ -4,6 +4,8 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:a_strange_loop/providers/chat_state.dart';
 import 'package:a_strange_loop/models/session.dart';
 import 'package:a_strange_loop/widgets/session_tile.dart';
+import 'package:a_strange_loop/widgets/animations.dart';
+import 'package:a_strange_loop/theme/app_theme.dart';
 
 class Sidebar extends StatefulWidget {
   final double? width;
@@ -28,27 +30,14 @@ class _SidebarState extends State<Sidebar> {
     final cs = context.watch<ChatState>();
     final colorScheme = Theme.of(context).colorScheme;
 
-    final pinnedSessions =
-        cs.sessions.where((s) => s.pinned).toList();
-    final unpinnedSessions =
-        cs.sessions.where((s) => !s.pinned).toList();
+    final pinnedSessions = cs.sessions.where((s) => s.pinned).toList();
+    final unpinnedSessions = cs.sessions.where((s) => !s.pinned).toList();
 
     return Container(
       width: widget.width ?? 300,
       color: colorScheme.surfaceContainerLow,
       child: Column(
         children: [
-           Padding(
-             padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-             child: SizedBox(
-               width: double.infinity,
-               child: Text('A Strange Loop',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.onSurface)),
-             ),
-           ),
           _buildNewChatButton(context, cs),
           _buildSearchField(context, colorScheme, cs),
           _buildBrainButton(context, colorScheme, cs),
@@ -63,14 +52,19 @@ class _SidebarState extends State<Sidebar> {
               padding: const EdgeInsets.only(top: 8),
               children: [
                 if (pinnedSessions.isNotEmpty) ...[
-                  _buildSectionHeader(context, 'Pinned'),
-                  ...pinnedSessions.map(
-                      (s) => _buildSessionTile(cs, s, colorScheme)),
+                  _buildSectionHeader(context, 'PINNED'),
+                  ...pinnedSessions
+                      .map((s) => _buildSessionTile(cs, s, colorScheme)),
                 ],
                 if (unpinnedSessions.isNotEmpty) ...[
-                  _buildSectionHeader(context, 'Recent'),
-                  ...unpinnedSessions.map(
-                      (s) => _buildSessionTile(cs, s, colorScheme)),
+                  _buildSectionHeader(context, 'RECENT'),
+                  ...unpinnedSessions.asMap().entries.map((entry) {
+                    return StaggeredEntrance(
+                      index: entry.key,
+                      child:
+                          _buildSessionTile(cs, entry.value, colorScheme),
+                    );
+                  }),
                 ],
               ],
             );
@@ -83,17 +77,27 @@ class _SidebarState extends State<Sidebar> {
   Widget _buildNewChatButton(BuildContext context, ChatState cs) {
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 8),
       child: SizedBox(
         width: double.infinity,
         child: FilledButton.icon(
           onPressed: () => cs.createNewSession(),
-          icon: const Icon(Icons.edit_square, size: 18),
-          label: const Text('New Chat'),
+          icon: const Icon(Icons.edit_sharp, size: 16),
+          label: Text(
+            'NEW CHAT',
+            style: AppTextStyles.body(context).copyWith(
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              letterSpacing: 1.0,
+              color: colorScheme.onPrimary,
+            ),
+          ),
           style: FilledButton.styleFrom(
             backgroundColor: colorScheme.primary,
-            foregroundColor: colorScheme.onPrimary,
             padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.zero,
+            ),
           ),
         ),
       ),
@@ -106,16 +110,30 @@ class _SidebarState extends State<Sidebar> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: SizedBox(
         width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: () => _showBrain(context, cs),
-          icon: const Icon(Icons.psychology, size: 16),
-          label: const Text('Reading Brain'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: colorScheme.secondary,
-            side: BorderSide(color: colorScheme.outline.withAlpha(80)),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: () => _showBrain(context, cs),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: colorScheme.outline, width: 1.5),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.psychology_outlined,
+                    size: 15,
+                    color: colorScheme.onSurface.withAlpha(180)),
+                const SizedBox(width: 8),
+                Text(
+                  'READING BRAIN',
+                  style: AppTextStyles.body(context).copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.0,
+                    color: colorScheme.onSurface.withAlpha(180),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -137,10 +155,18 @@ class _SidebarState extends State<Sidebar> {
             if (snapshot.hasData) {
               return _buildBrainDialog(dCtx, snapshot.data!);
             }
-            return const Dialog(
+            return Dialog(
+              backgroundColor:
+                  Theme.of(dCtx).colorScheme.surfaceContainerHigh,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.zero,
+              ),
               child: SizedBox(
                 height: 200,
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(
+                  child: BlockLoader(
+                      color: Theme.of(dCtx).colorScheme.primary),
+                ),
               ),
             );
           },
@@ -152,68 +178,81 @@ class _SidebarState extends State<Sidebar> {
   Widget _buildBrainDialog(BuildContext ctx, String brain) {
     final colorScheme = Theme.of(ctx).colorScheme;
     return Dialog(
-        insetPadding: const EdgeInsets.all(16),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720, maxHeight: 680),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 8, 0),
-                child: Row(
-                  children: [
-                    const Icon(Icons.psychology, size: 18),
-                    const SizedBox(width: 8),
-                    const Text('Reading Brain',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        )),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () => Navigator.of(ctx).pop(),
+      backgroundColor: colorScheme.surfaceContainerHigh,
+      insetPadding: const EdgeInsets.all(16),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720, maxHeight: 680),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 8, 0),
+              child: Row(
+                children: [
+                  Icon(Icons.psychology_outlined,
+                      size: 18, color: colorScheme.onSurface.withAlpha(180)),
+                  const SizedBox(width: 8),
+                  Text(
+                    'READING BRAIN',
+                    style: AppTextStyles.display(context).copyWith(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.0,
+                      color: colorScheme.onSurface,
                     ),
-                  ],
-                ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close_sharp, size: 18),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
               ),
-              const Divider(),
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                  child: MarkdownBody(
-                    data: brain,
-                    selectable: true,
-                    styleSheet: MarkdownStyleSheet(
-                      p: const TextStyle(fontSize: 14, height: 1.6),
-                      h1: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: colorScheme.onSurface),
-                      h2: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: colorScheme.onSurface),
-                      h3: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: colorScheme.onSurface),
-                      blockquoteDecoration: BoxDecoration(
-                        border: Border(
-                          left: BorderSide(
-                            color: colorScheme.primary.withAlpha(80),
-                            width: 2,
-                          ),
+            ),
+            Container(height: 1, color: colorScheme.outline),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                child: MarkdownBody(
+                  data: brain,
+                  selectable: true,
+                  styleSheet: MarkdownStyleSheet(
+                    p: const TextStyle(fontSize: 14, height: 1.6),
+                    h1: AppTextStyles.display(context).copyWith(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: colorScheme.onSurface,
+                      letterSpacing: 0.5,
+                    ),
+                    h2: AppTextStyles.display(context).copyWith(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: colorScheme.onSurface,
+                    ),
+                    h3: AppTextStyles.display(context).copyWith(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
+                    ),
+                    blockquoteDecoration: BoxDecoration(
+                      border: Border(
+                        left: BorderSide(
+                          color: colorScheme.secondary,
+                          width: 2,
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
+      ),
     );
   }
 
@@ -221,37 +260,38 @@ class _SidebarState extends State<Sidebar> {
       BuildContext context, ColorScheme colorScheme, ChatState cs) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: TextField(
-        controller: _searchController,
-        onChanged: (q) => cs.searchSessions(q),
-        decoration: InputDecoration(
-          hintText: 'Search sessions...',
-          hintStyle: TextStyle(
-            fontSize: 13,
-            color: colorScheme.onSurface.withAlpha(100),
-          ),
-          prefixIcon: Icon(Icons.search,
-              size: 18, color: colorScheme.onSurface.withAlpha(120)),
-          suffixIcon: cs.isSearching
-              ? IconButton(
-                  icon: const Icon(Icons.close, size: 16),
-                  onPressed: () {
-                    _searchController.clear();
-                    cs.clearSearch();
-                  },
-                )
-              : null,
-          filled: true,
-          fillColor: colorScheme.surfaceContainerHighest,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          isDense: true,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: colorScheme.outline, width: 1),
         ),
-        style: const TextStyle(fontSize: 13),
+        child: TextField(
+          controller: _searchController,
+          onChanged: (q) => cs.searchSessions(q),
+          decoration: InputDecoration(
+            hintText: 'Search sessions...',
+            hintStyle: AppTextStyles.sidebarSubtitle(context).copyWith(
+              color: colorScheme.onSurface.withAlpha(80),
+              letterSpacing: 0.3,
+            ),
+            prefixIcon: Icon(Icons.search_sharp,
+                size: 16, color: colorScheme.onSurface.withAlpha(100)),
+            suffixIcon: cs.isSearching
+                ? IconButton(
+                    icon: const Icon(Icons.close_sharp, size: 14),
+                    onPressed: () {
+                      _searchController.clear();
+                      cs.clearSearch();
+                    },
+                  )
+                : null,
+            filled: false,
+            border: InputBorder.none,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            isDense: true,
+          ),
+          style: AppTextStyles.sidebarSubtitle(context),
+        ),
       ),
     );
   }
@@ -271,15 +311,18 @@ class _SidebarState extends State<Sidebar> {
   Widget _buildSectionHeader(BuildContext context, String label) {
     final colorScheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
-          color: colorScheme.onSurface.withAlpha(100),
-        ),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
+      child: Row(
+        children: [
+          Container(width: 8, height: 1, color: colorScheme.primary),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: AppTextStyles.sectionLabel(context).copyWith(
+              color: colorScheme.onSurface.withAlpha(80),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -291,15 +334,14 @@ class _SidebarState extends State<Sidebar> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.chat_bubble_outline,
-                size: 40, color: colorScheme.onSurface.withAlpha(80)),
+            Icon(Icons.chat_bubble_outline_sharp,
+                size: 28, color: colorScheme.onSurface.withAlpha(50)),
             const SizedBox(height: 12),
             Text(
               'No conversations yet.\nStart a new chat!',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: colorScheme.onSurface.withAlpha(120),
+              style: AppTextStyles.sidebarSubtitle(context).copyWith(
+                color: colorScheme.onSurface.withAlpha(100),
                 height: 1.4,
               ),
             ),
@@ -316,15 +358,14 @@ class _SidebarState extends State<Sidebar> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off,
-                size: 40, color: colorScheme.onSurface.withAlpha(80)),
+            Icon(Icons.search_off_sharp,
+                size: 28, color: colorScheme.onSurface.withAlpha(50)),
             const SizedBox(height: 12),
             Text(
               'No sessions found.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: colorScheme.onSurface.withAlpha(120),
+              style: AppTextStyles.sidebarSubtitle(context).copyWith(
+                color: colorScheme.onSurface.withAlpha(100),
               ),
             ),
           ],
@@ -335,13 +376,26 @@ class _SidebarState extends State<Sidebar> {
 
   void _confirmDelete(
       BuildContext context, ChatState cs, Session session) {
+    final colorScheme = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete conversation?'),
+        backgroundColor: colorScheme.surfaceContainerHigh,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.zero,
+        ),
+        title: Text(
+          'Delete conversation?',
+          style: AppTextStyles.display(context).copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+          ),
+        ),
         content: Text(
           'This will permanently delete "${session.displayTitle}" '
           'and all its messages.',
+          style: AppTextStyles.body(context).copyWith(fontSize: 13),
         ),
         actions: [
           TextButton(
@@ -354,7 +408,7 @@ class _SidebarState extends State<Sidebar> {
               cs.deleteSession(session.id);
             },
             style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: colorScheme.error,
             ),
             child: const Text('Delete'),
           ),

@@ -5,6 +5,8 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 import 'package:a_strange_loop/providers/chat_state.dart';
 import 'package:a_strange_loop/widgets/sidebar.dart';
+import 'package:a_strange_loop/widgets/animations.dart';
+import 'package:a_strange_loop/theme/app_theme.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -33,14 +35,9 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       await cs.initializeSessions();
     } catch (_) {
-      // ignore: avoid_print
-      print('Failed to initialize sessions, starting fresh');
       try {
         await cs.fallbackToEmptySession();
-      } catch (_) {
-        // ignore: avoid_print
-        print('Failed to create fallback session');
-      }
+      } catch (_) {}
     }
     if (mounted) {
       setState(() => _initialized = true);
@@ -68,71 +65,86 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     if (!_initialized) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    final isWide = MediaQuery.of(context).size.width >= 840;
-
-    if (isWide) {
       return Scaffold(
-        body: Row(
-          children: [
-            const Sidebar(width: 300),
-            const VerticalDivider(width: 1),
-            Expanded(child: _buildChatArea()),
-          ],
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        body: Center(
+          child: BlockLoader(color: Theme.of(context).colorScheme.primary),
         ),
       );
     }
 
+    final isWide = MediaQuery.of(context).size.width >= 840;
+
     return Scaffold(
       key: _scaffoldKey,
-      appBar: _buildAppBar(),
-      drawer: const Sidebar(),
-      body: _buildChatArea(),
+      appBar: _buildHeader(isWide),
+      drawer: isWide ? null : const Sidebar(),
+      body: isWide
+          ? Row(
+              children: [
+                const Sidebar(width: 300),
+                Container(
+                    width: 1, color: Theme.of(context).colorScheme.outline),
+                Expanded(child: _buildChatArea()),
+              ],
+            )
+          : _buildChatArea(),
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
-    final isWide = MediaQuery.of(context).size.width >= 840;
+  PreferredSizeWidget _buildHeader(bool isWide) {
+    final cs = Theme.of(context).colorScheme;
+
     return AppBar(
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      backgroundColor: cs.surface,
       leading: isWide
           ? null
           : IconButton(
-              icon: const Icon(Icons.menu),
+              icon: const Icon(Icons.menu_sharp, size: 20),
               onPressed: () => _scaffoldKey.currentState?.openDrawer(),
             ),
       title: Consumer<ChatState>(
         builder: (context, state, _) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          return Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('A Strange Loop',
-                  style:
-                      TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-              if (state.currentBookTitle != null)
-                Text(
-                  'Reading: ${state.currentBookTitle}'
-                  '${state.currentBookProgress != null ? ' \u00b7 ${state.currentBookProgress}' : ''}',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withAlpha(150)),
+              PulsingLoop(size: 18, color: cs.primary),
+              const SizedBox(width: 10),
+              Text(
+                'A STRANGE LOOP',
+                style: AppTextStyles.display(context).copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
                 ),
+              ),
+              if (state.currentBookTitle != null) ...[
+                const SizedBox(width: 12),
+                Container(width: 1, height: 14, color: cs.outline),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    '${state.currentBookTitle}'
+                    '${state.currentBookProgress != null ? ' \u00b7 ${state.currentBookProgress}' : ''}',
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.chatCaption(context).copyWith(
+                      color: cs.onSurface.withAlpha(120),
+                    ),
+                  ),
+                ),
+              ],
             ],
           );
         },
       ),
       centerTitle: false,
-      titleSpacing: isWide ? 16 : 0,
+      titleSpacing: isWide ? 20 : 0,
       actions: [
         if (!isWide)
           IconButton(
-            icon: const Icon(Icons.edit_square, size: 20),
+            icon: Icon(Icons.edit_sharp, size: 18, color: cs.primary),
             tooltip: 'New Chat',
             onPressed: () {
               _scaffoldKey.currentState?.closeDrawer();
@@ -140,25 +152,35 @@ class _ChatScreenState extends State<ChatScreen> {
             },
           ),
         IconButton(
-          icon: const Icon(Icons.logout, size: 20),
+          icon: Icon(Icons.logout_sharp, size: 18,
+              color: cs.onSurface.withAlpha(120)),
           tooltip: 'Sign out',
           onPressed: () => FirebaseAuth.instance.signOut(),
         ),
       ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(height: 1, color: cs.outline),
+      ),
     );
   }
 
   Widget _buildChatArea() {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 768),
-        child: Column(
-          children: [
-            Expanded(child: _buildMessageList()),
-            _buildErrorBanner(),
-            _buildTokenFooter(),
-            _buildInputBar(),
-          ],
+    return FloatingDust(
+      particleCount: 12,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 768),
+          child: Column(
+            children: [
+              Expanded(child: _buildMessageList()),
+              _buildErrorBanner(),
+              _buildTokenFooter(),
+              Container(
+                  height: 1, color: Theme.of(context).colorScheme.outline),
+              _buildInputBar(),
+            ],
+          ),
         ),
       ),
     );
@@ -179,14 +201,16 @@ class _ChatScreenState extends State<ChatScreen> {
         }
         return ListView.builder(
           controller: _scrollController,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           itemCount: state.messages.length +
               (state.streamingContent != null ? 1 : 0),
           itemBuilder: (context, index) {
             if (state.streamingContent != null &&
                 index == state.messages.length) {
               if (state.streamingContent!.isEmpty) {
-                return _buildTypingIndicator();
+                return TypingBubble(
+                  color: Theme.of(context).colorScheme.primary,
+                );
               }
               return _buildAssistantText(state.streamingContent!);
             }
@@ -198,22 +222,23 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildEmptyState() {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(40),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.auto_awesome,
-                size: 48,
-                color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 16),
-            const Text(
-              "I'm A Strange Loop. I am your reading brain. Ask me "
-              'anything; what to read next, how your taste has evolved, '
-              'or just talk about books.',
+            PulsingLoop(size: 48, color: cs.primary),
+            const SizedBox(height: 28),
+            Container(width: 32, height: 2, color: cs.primary),
+            const SizedBox(height: 20),
+            Text(
+              "I'm A Strange Loop. I am your reading brain.\nAsk me anything — what to read next, how your taste has evolved, or just talk about books.",
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, height: 1.5),
+              style: AppTextStyles.chatBody(context).copyWith(
+                color: cs.onSurface.withAlpha(160),
+              ),
             ),
           ],
         ),
@@ -230,109 +255,72 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildUserBubble(String content) {
+    final cs = Theme.of(context).colorScheme;
     return Align(
       alignment: Alignment.centerRight,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 16),
         constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.8),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primaryContainer,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-            bottomLeft: Radius.circular(16),
-            bottomRight: Radius.circular(4),
-          ),
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
-        child: Text(content,
-            style: const TextStyle(fontSize: 15, height: 1.5)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: cs.outline, width: 1),
+        ),
+        child: Text(
+          content,
+          style: AppTextStyles.chatBody(context),
+        ),
       ),
     );
   }
 
   Widget _buildAssistantText(String content) {
+    final cs = Theme.of(context).colorScheme;
     _markdownStyleSheet ??= MarkdownStyleSheet(
-      p: const TextStyle(fontSize: 15, height: 1.6),
-      h1: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          color: Theme.of(context).colorScheme.onSurface),
-      h2: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          color: Theme.of(context).colorScheme.onSurface),
-      h3: TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.w600,
-          color: Theme.of(context).colorScheme.onSurface),
+      p: AppTextStyles.chatBody(context),
+      h1: AppTextStyles.display(context).copyWith(
+        fontSize: 20,
+        fontWeight: FontWeight.w800,
+        color: cs.onSurface,
+        letterSpacing: 0.5,
+      ),
+      h2: AppTextStyles.display(context).copyWith(
+        fontSize: 17,
+        fontWeight: FontWeight.w700,
+        color: cs.onSurface,
+      ),
+      h3: AppTextStyles.display(context).copyWith(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        color: cs.onSurface,
+      ),
       blockquoteDecoration: BoxDecoration(
         border: Border(
-          left: BorderSide(
-            color: Theme.of(context).colorScheme.primary.withAlpha(80),
-            width: 2,
-          ),
+          left: BorderSide(color: cs.secondary, width: 2),
         ),
       ),
       codeblockDecoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: cs.outline, width: 1),
       ),
     );
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.only(bottom: 22),
       child: Container(
-        padding: const EdgeInsets.only(left: 15),
         decoration: BoxDecoration(
           border: Border(
-            left: BorderSide(
-              color: Theme.of(context).colorScheme.primary.withAlpha(60),
-              width: 3,
-            ),
+            left: BorderSide(color: cs.primary, width: 3),
           ),
         ),
-        child: MarkdownBody(
-          data: content,
-          selectable: true,
-          styleSheet: _markdownStyleSheet,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTypingIndicator() {
-    final isCompressing = context.read<ChatState>().isCompressing;
-    final label = isCompressing
-        ? 'Compressing conversation history...'
-        : 'Thinking...';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Row(
-        children: [
-          Container(
-            width: 3,
-            decoration: BoxDecoration(
-              color: Theme.of(context)
-                  .colorScheme
-                  .primary
-                  .withAlpha(60),
-              borderRadius: BorderRadius.circular(2),
-            ),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 14, top: 4, bottom: 4, right: 8),
+          child: MarkdownBody(
+            data: content,
+            selectable: true,
+            styleSheet: _markdownStyleSheet,
           ),
-          const SizedBox(width: 12),
-          Text(label,
-              style: TextStyle(
-                fontSize: 14,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withAlpha(120),
-                fontStyle: FontStyle.italic,
-              )),
-        ],
+        ),
       ),
     );
   }
@@ -346,17 +334,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
         return Container(
           width: double.infinity,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Text(
             '${state.messages.length} messages$suffix \u00b7 ${state.formattedSessionTokens}',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 11,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withAlpha(100),
+            style: AppTextStyles.chatCaption(context).copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withAlpha(70),
+              letterSpacing: 0.5,
             ),
           ),
         );
@@ -369,10 +353,8 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (context, state, _) {
         if (state.error == null) return const SizedBox.shrink();
         return MaterialBanner(
-          content:
-              Text(state.error!, style: const TextStyle(fontSize: 13)),
-          backgroundColor:
-              Theme.of(context).colorScheme.errorContainer,
+          content: Text(state.error!, style: const TextStyle(fontSize: 12)),
+          backgroundColor: Theme.of(context).colorScheme.errorContainer,
           actions: [
             TextButton(
               onPressed: () => state.clearError(),
@@ -385,42 +367,52 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildInputBar() {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
             child: CallbackShortcuts(
               bindings: {
                 const SingleActivator(LogicalKeyboardKey.enter): _sendMessage,
               },
-              child: TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                decoration: InputDecoration(
-                  hintText: 'Ask me anything, friend...',
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none),
-                  filled: true,
-                  fillColor: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: cs.outline, width: 1.5),
                 ),
-                textInputAction: TextInputAction.newline,
-                maxLines: null,
-                textCapitalization: TextCapitalization.sentences,
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  style: AppTextStyles.chatBody(context),
+                  decoration: InputDecoration(
+                    hintText: 'Ask me anything, friend...',
+                    hintStyle: AppTextStyles.inputHint(context).copyWith(
+                      fontSize: 14,
+                      letterSpacing: 0.2,
+                    ),
+                    border: InputBorder.none,
+                    filled: false,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                  ),
+                  textInputAction: TextInputAction.newline,
+                  maxLines: null,
+                  textCapitalization: TextCapitalization.sentences,
+                ),
               ),
             ),
           ),
           const SizedBox(width: 8),
           Consumer<ChatState>(
             builder: (context, state, _) {
-              return IconButton.filled(
-                onPressed: state.isLoading ? null : _sendMessage,
-                icon: const Icon(Icons.arrow_upward),
+              return MorphingSendButton(
+                loading: state.isLoading,
+                onSend: _sendMessage,
               );
             },
           ),

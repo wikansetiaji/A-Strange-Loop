@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:a_strange_loop/models/session.dart';
+import 'package:a_strange_loop/theme/app_theme.dart';
 
 class SessionTile extends StatelessWidget {
   final Session session;
@@ -24,27 +25,21 @@ class SessionTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: Material(
-        color: isActive
-            ? colorScheme.secondaryContainer.withAlpha(80)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        color:
+            isActive ? colorScheme.surfaceContainerHighest : Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+            padding: const EdgeInsets.fromLTRB(10, 10, 4, 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (isActive)
                   Container(
                     width: 3,
-                    height: 32,
-                    margin: const EdgeInsets.only(right: 10, top: 2),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primary,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+                    margin:
+                        const EdgeInsets.only(right: 8, top: 3, bottom: 2),
+                    color: colorScheme.primary,
                   ),
                 Expanded(
                   child: Column(
@@ -54,11 +49,13 @@ class SessionTile extends StatelessWidget {
                         session.displayTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
+                        style: AppTextStyles.sidebarTitle(context).copyWith(
                           fontWeight:
-                              isActive ? FontWeight.w600 : FontWeight.w500,
-                          color: colorScheme.onSurface,
+                              isActive ? FontWeight.w700 : FontWeight.w500,
+                          letterSpacing: 0.2,
+                          color: isActive
+                              ? colorScheme.onSurface
+                              : colorScheme.onSurface.withAlpha(190),
                         ),
                       ),
                       if (session.lastMessage.isNotEmpty) ...[
@@ -67,18 +64,18 @@ class SessionTile extends StatelessWidget {
                           session.lastMessage,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colorScheme.onSurface.withAlpha(120),
+                          style: AppTextStyles.sidebarSubtitle(context)
+                              .copyWith(
+                            color: colorScheme.onSurface.withAlpha(110),
                           ),
                         ),
                       ],
                       const SizedBox(height: 2),
                       Text(
                         _formatDate(session.updatedAt),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: colorScheme.onSurface.withAlpha(80),
+                        style: AppTextStyles.sidebarDate(context).copyWith(
+                          color: colorScheme.onSurface.withAlpha(60),
+                          letterSpacing: 0.3,
                         ),
                       ),
                     ],
@@ -87,28 +84,28 @@ class SessionTile extends StatelessWidget {
                 IconButton(
                   icon: Icon(
                     session.pinned
-                        ? Icons.push_pin
+                        ? Icons.push_pin_sharp
                         : Icons.push_pin_outlined,
-                    size: 16,
+                    size: 15,
                     color: session.pinned
                         ? colorScheme.primary
-                        : colorScheme.onSurface.withAlpha(100),
+                        : colorScheme.onSurface.withAlpha(90),
                   ),
                   onPressed: onPin,
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
                   constraints:
-                      const BoxConstraints(minWidth: 32, minHeight: 32),
+                      const BoxConstraints(minWidth: 28, minHeight: 28),
                 ),
                 IconButton(
-                  icon: Icon(Icons.delete_outline,
-                      size: 16,
-                      color: colorScheme.onSurface.withAlpha(100)),
+                  icon: Icon(Icons.delete_outline_sharp,
+                      size: 15,
+                      color: colorScheme.onSurface.withAlpha(90)),
                   onPressed: onDelete,
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
                   constraints:
-                      const BoxConstraints(minWidth: 32, minHeight: 32),
+                      const BoxConstraints(minWidth: 28, minHeight: 28),
                 ),
               ],
             ),
