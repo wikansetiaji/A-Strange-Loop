@@ -19,6 +19,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final FocusNode _focusNode = FocusNode();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _initialized = false;
+  MarkdownStyleSheet? _markdownStyleSheet;
+  bool _scrollRequested = false;
 
   @override
   void initState() {
@@ -58,7 +60,9 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty) return;
 
     _controller.clear();
-    context.read<ChatState>().sendMessage(text);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ChatState>().sendMessage(text);
+    });
   }
 
   @override
@@ -166,8 +170,13 @@ class _ChatScreenState extends State<ChatScreen> {
         if (state.messages.isEmpty && state.streamingContent == null) {
           return _buildEmptyState();
         }
-        WidgetsBinding.instance
-            .addPostFrameCallback((_) => _scrollToBottom());
+        if (!_scrollRequested) {
+          _scrollRequested = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _scrollToBottom();
+            _scrollRequested = false;
+          });
+        }
         return ListView.builder(
           controller: _scrollController,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -245,100 +254,85 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildAssistantText(String content) {
+    _markdownStyleSheet ??= MarkdownStyleSheet(
+      p: const TextStyle(fontSize: 15, height: 1.6),
+      h1: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          color: Theme.of(context).colorScheme.onSurface),
+      h2: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).colorScheme.onSurface),
+      h3: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).colorScheme.onSurface),
+      blockquoteDecoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: Theme.of(context).colorScheme.primary.withAlpha(80),
+            width: 2,
+          ),
+        ),
+      ),
+      codeblockDecoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
+      child: Container(
+        padding: const EdgeInsets.only(left: 15),
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: Theme.of(context).colorScheme.primary.withAlpha(60),
               width: 3,
-              decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .primary
-                    .withAlpha(60),
-                borderRadius: BorderRadius.circular(2),
-              ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: MarkdownBody(
-                data: content,
-                selectable: true,
-                styleSheet: MarkdownStyleSheet(
-                  p: const TextStyle(fontSize: 15, height: 1.6),
-                  h1: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Theme.of(context).colorScheme.onSurface),
-                  h2: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface),
-                  h3: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface),
-                  blockquoteDecoration: BoxDecoration(
-                    border: Border(
-                      left: BorderSide(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .primary
-                            .withAlpha(80),
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                  codeblockDecoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
+        ),
+        child: MarkdownBody(
+          data: content,
+          selectable: true,
+          styleSheet: _markdownStyleSheet,
         ),
       ),
     );
   }
 
   Widget _buildTypingIndicator() {
+    final isCompressing = context.read<ChatState>().isCompressing;
+    final label = isCompressing
+        ? 'Compressing conversation history...'
+        : 'Thinking...';
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
-      child: Consumer<ChatState>(
-        builder: (context, state, _) {
-          final label = state.isCompressing
-              ? 'Compressing conversation history...'
-              : 'Thinking...';
-          return Row(
-            children: [
-              Container(
-                width: 3,
-                decoration: BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .primary
-                      .withAlpha(60),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withAlpha(120),
-                    fontStyle: FontStyle.italic,
-                  )),
-            ],
-          );
-        },
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            decoration: BoxDecoration(
+              color: Theme.of(context)
+                  .colorScheme
+                  .primary
+                  .withAlpha(60),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(label,
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withAlpha(120),
+                fontStyle: FontStyle.italic,
+              )),
+        ],
       ),
     );
   }
@@ -437,10 +431,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
-      _scrollController.animateTo(
+      _scrollController.jumpTo(
         _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
       );
     }
   }

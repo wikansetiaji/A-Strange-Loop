@@ -8,7 +8,6 @@ import 'package:a_strange_loop/services/ai_service.dart';
 import 'package:a_strange_loop/services/brain_parser.dart';
 import 'package:a_strange_loop/constants/system_prompt.dart';
 import 'package:a_strange_loop/constants/api_config.dart';
-import 'package:a_strange_loop/utils/token_counter.dart';
 
 class ChatState extends ChangeNotifier {
   final FirestoreService _firestore = FirestoreService();
@@ -169,6 +168,7 @@ class ChatState extends ChangeNotifier {
 
   Future<void> sendMessage(String text) async {
     assert(currentSessionId != null, 'No active session');
+    if (isLoading) return;
 
     final userMsg = Message(
       role: 'user',
@@ -338,7 +338,7 @@ class ChatState extends ChangeNotifier {
 
   Future<List<Message>> _maybeCompress(String brain) async {
     final fullPrompt = _buildPrompt(brain, messages);
-    final totalTokens = TokenCounter.count(fullPrompt);
+    final totalTokens = fullPrompt.length ~/ 4;
 
     if (totalTokens <= maxInputTokens) {
       return messages;
