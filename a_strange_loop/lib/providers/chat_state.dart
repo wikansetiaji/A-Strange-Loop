@@ -182,86 +182,198 @@ class ChatState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final brain = await _getBrain();
-
-      final compressed = await _maybeCompress(brain);
-      final prompt = _buildPrompt(brain, compressed);
-
-      final buffer = StringBuffer();
-      bool blocksDetected = false;
-      final blockBuffer = StringBuffer();
-      String visibleBuffer = '';
-
-      await for (final chunk in _ai.sendMessageStream(prompt)) {
-        if (chunk.startsWith('[USAGE:')) {
-          final parts = chunk
-              .substring(7, chunk.length - 1)
-              .split(':');
-          sessionPromptTokens += int.parse(parts[0]);
-          sessionCompletionTokens += int.parse(parts[1]);
-        } else {
-          buffer.write(chunk);
-
-          if (blocksDetected) {
-            blockBuffer.write(chunk);
-            continue;
-          }
-
-          final combined = visibleBuffer + chunk;
-          final markerIdx = _findBlockMarker(combined);
-          if (markerIdx != -1) {
-            visibleBuffer = combined.substring(0, markerIdx);
-            final remaining = combined.substring(markerIdx);
-            blockBuffer.write(remaining);
-            blocksDetected = true;
-          } else {
-            visibleBuffer = combined;
-          }
-
-          streamingContent = visibleBuffer;
-          _throttledNotify();
-        }
-      }
-
-      final fullContent = buffer.toString();
-      final isBlockResponse =
-          blocksDetected && _containsBlockMarker(fullContent);
-      final parsed =
-          isBlockResponse ? BrainParser.parse(fullContent) : null;
-      final prose = parsed?.prose ?? fullContent;
-
-      final assistantMsg = Message(
-        role: 'assistant',
-        content: prose,
-        order: messages.length,
-      );
-      messages.add(assistantMsg);
-      streamingContent = null;
-      isLoading = false;
-
-      await _persistAfterResponse(userMsg, assistantMsg);
-
-      if (parsed != null && parsed.blocks.isNotEmpty) {
-        try {
-          final freshBrain = await _firestore.getBrain();
-          final update =
-              BrainParser.applyBlocks(freshBrain, parsed.blocks);
-          await _firestore.updateBrain(update.brain, update.log);
-          _brainCache = update.brain;
-          _brainFetchedAt = DateTime.now();
-          _parseCurrentReading(update.brain);
-        } catch (e) {
-          debugPrint('BrainParser error: $e');
-        }
-      }
-
-      notifyListeners();
+      await _firestore.saveMessage(currentSessionId!, userMsg);
+      await _generateResponse();
     } catch (e) {
       streamingContent = null;
       isLoading = false;
       error = e.toString();
       notifyListeners();
     }
+  }
+
+  Future<void> editMessage(int index, String newContent) async {
+    assert(currentSessionId != null, 'No active session');
+    if (isLoading) return;
+    if (index < 0 || index >= messages.length) return;
+    if (messages[index].role != 'user') return;
+
+    final oldOrder = messages[index].order;
+    final oldTimestamp = messages[index].timestamp;
+    final firestoreId = messages[index].firestoreId;
+
+    messages = messages.sublist(0, index + 1);
+    messages[index] = Message(
+      role: 'user',
+      content: newContent,
+      order: oldOrder,
+      firestoreId: firestoreId,
+      timestamp: oldTimestamp,
+    );
+
+    if (_lastSummarizedIndex > messages.length) {
+      _lastSummarizedIndex = 0;
+      _conversationSummary = null;
+    }
+
+    streamingContent = '';
+    error = null;
+    isLoading = true;
+    notifyListeners();
+
+    try {
+      if (firestoreId != null) {
+        await _firestore.updateMessageContent(
+            currentSessionId!, firestoreId, newContent);
+      }
+      await _firestore.deleteMessagesAfterOrder(
+          currentSessionId!, oldOrder);
+      await _generateResponse();
+    } catch (e) {
+      streamingContent = null;
+      isLoading = false;
+      error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> resetToMessage(int index) async {
+    assert(currentSessionId != null, 'No active session');
+    if (isLoading) return;
+    if (index < 0 || index >= messages.length) return;
+
+    final cutoffOrder = messages[index].order;
+
+    messages = messages.sublist(0, index + 1);
+
+    if (_lastSummarizedIndex > messages.length) {
+      _lastSummarizedIndex = 0;
+      _conversationSummary = null;
+    }
+
+    await _firestore.deleteMessagesAfterOrder(
+        currentSessionId!, cutoffOrder);
+
+    final meta = _currentSessionMeta();
+    await _firestore.updateSessionMeta(currentSessionId!, meta.toMap());
+
+    final idx = sessions.indexWhere((s) => s.id == currentSessionId);
+    if (idx != -1) {
+      sessions[idx] = meta;
+    }
+    _sortSessions();
+
+    final lastMsg = messages.last;
+    if (lastMsg.role == 'user') {
+      streamingContent = '';
+      error = null;
+      isLoading = true;
+      notifyListeners();
+
+      try {
+        await _generateResponse();
+      } catch (e) {
+        streamingContent = null;
+        isLoading = false;
+        error = e.toString();
+        notifyListeners();
+      }
+    } else {
+      notifyListeners();
+    }
+  }
+
+  Future<void> _generateResponse() async {
+    final brain = await _getBrain();
+
+    final compressed = await _maybeCompress(brain);
+    final prompt = _buildPrompt(brain, compressed);
+
+    final buffer = StringBuffer();
+    bool blocksDetected = false;
+    final blockBuffer = StringBuffer();
+    String visibleBuffer = '';
+
+    await for (final chunk in _ai.sendMessageStream(prompt)) {
+      if (chunk.startsWith('[USAGE:')) {
+        final parts = chunk
+            .substring(7, chunk.length - 1)
+            .split(':');
+        sessionPromptTokens += int.parse(parts[0]);
+        sessionCompletionTokens += int.parse(parts[1]);
+      } else {
+        buffer.write(chunk);
+
+        if (blocksDetected) {
+          blockBuffer.write(chunk);
+          continue;
+        }
+
+        final combined = visibleBuffer + chunk;
+        final markerIdx = _findBlockMarker(combined);
+        if (markerIdx != -1) {
+          visibleBuffer = combined.substring(0, markerIdx);
+          final remaining = combined.substring(markerIdx);
+          blockBuffer.write(remaining);
+          blocksDetected = true;
+        } else {
+          visibleBuffer = combined;
+        }
+
+        streamingContent = visibleBuffer;
+        _throttledNotify();
+      }
+    }
+
+    final fullContent = buffer.toString();
+    final isBlockResponse =
+        blocksDetected && _containsBlockMarker(fullContent);
+    final parsed =
+        isBlockResponse ? BrainParser.parse(fullContent) : null;
+    final prose = parsed?.prose ?? fullContent;
+
+    final assistantMsg = Message(
+      role: 'assistant',
+      content: prose,
+      order: messages.length,
+    );
+    messages.add(assistantMsg);
+    streamingContent = null;
+    isLoading = false;
+
+    await _firestore.saveMessage(currentSessionId!, assistantMsg);
+
+    final meta = _currentSessionMeta();
+    await _firestore.updateSessionMeta(currentSessionId!, meta.toMap());
+
+    final idx = sessions.indexWhere((s) => s.id == currentSessionId);
+    if (idx != -1) {
+      sessions[idx] = meta;
+    } else {
+      sessions.insert(0, meta);
+    }
+    _sortSessions();
+
+    final wasFirstExchange = messages.length == 2 && meta.title == null;
+    if (wasFirstExchange) {
+      _generateTitle(messages[0].content, messages[1].content);
+    }
+
+    if (parsed != null && parsed.blocks.isNotEmpty) {
+      try {
+        final freshBrain = await _firestore.getBrain();
+        final update =
+            BrainParser.applyBlocks(freshBrain, parsed.blocks);
+        await _firestore.updateBrain(update.brain, update.log);
+        _brainCache = update.brain;
+        _brainFetchedAt = DateTime.now();
+        _parseCurrentReading(update.brain);
+      } catch (e) {
+        debugPrint('BrainParser error: $e');
+      }
+    }
+
+    notifyListeners();
   }
 
   static int _findBlockMarker(String text) {
@@ -289,30 +401,6 @@ class ChatState extends ChangeNotifier {
     if (now.difference(_lastNotify).inMilliseconds >= 50) {
       _lastNotify = now;
       notifyListeners();
-    }
-  }
-
-  Future<void> _persistAfterResponse(
-      Message userMsg, Message assistantMsg) async {
-    final sid = currentSessionId!;
-
-    await _firestore.saveMessage(sid, userMsg);
-    await _firestore.saveMessage(sid, assistantMsg);
-
-    final meta = _currentSessionMeta();
-    await _firestore.updateSessionMeta(sid, meta.toMap());
-
-    final idx = sessions.indexWhere((s) => s.id == sid);
-    if (idx != -1) {
-      sessions[idx] = meta;
-    } else {
-      sessions.insert(0, meta);
-    }
-    _sortSessions();
-
-    final wasFirstExchange = messages.length == 2 && meta.title == null;
-    if (wasFirstExchange) {
-      _generateTitle(messages[0].content, messages[1].content);
     }
   }
 

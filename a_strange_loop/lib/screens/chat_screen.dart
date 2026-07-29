@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 import 'package:a_strange_loop/providers/chat_state.dart';
+import 'package:a_strange_loop/models/message.dart';
 import 'package:a_strange_loop/widgets/sidebar.dart';
 import 'package:a_strange_loop/widgets/animations.dart';
 import 'package:a_strange_loop/theme/app_theme.dart';
@@ -22,7 +23,12 @@ class _ChatScreenState extends State<ChatScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _initialized = false;
   MarkdownStyleSheet? _markdownStyleSheet;
-  bool _scrollRequested = false;
+  int? _lastItemCount;
+
+  int? _hoveredIndex;
+  int? _editingIndex;
+  final TextEditingController _editController = TextEditingController();
+  final FocusNode _editFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -49,6 +55,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _controller.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
+    _editController.dispose();
+    _editFocusNode.dispose();
     super.dispose();
   }
 
@@ -190,13 +198,15 @@ class _ChatScreenState extends State<ChatScreen> {
     return Consumer<ChatState>(
       builder: (context, state, _) {
         if (state.messages.isEmpty && state.streamingContent == null) {
+          _lastItemCount = null;
           return _buildEmptyState();
         }
-        if (!_scrollRequested) {
-          _scrollRequested = true;
+        final itemCount = state.messages.length +
+            (state.streamingContent != null ? 1 : 0);
+        if (itemCount != _lastItemCount) {
+          _lastItemCount = itemCount;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _scrollToBottom();
-            _scrollRequested = false;
           });
         }
         return ListView.builder(
@@ -214,7 +224,7 @@ class _ChatScreenState extends State<ChatScreen> {
               }
               return _buildAssistantText(state.streamingContent!);
             }
-            return _buildMessage(state.messages[index]);
+            return _buildMessage(state.messages[index], index);
           },
         );
       },
@@ -246,13 +256,183 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildMessage(dynamic msg) {
+  Widget _buildMessage(Message msg, int index) {
     final isUser = msg.role == 'user';
-    if (isUser) {
-      return _buildUserBubble(msg.content);
-    }
-    return _buildAssistantText(msg.content);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hoveredIndex = index),
+      onExit: (_) => setState(() {
+        if (_hoveredIndex == index) _hoveredIndex = null;
+      }),
+      child: GestureDetector(
+        onLongPressStart: (details) =>
+            _showMessageMenu(index, details.globalPosition),
+        child: Column(
+          crossAxisAlignment:
+              isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            if (_editingIndex == index)
+              _buildEditField(index)
+            else if (isUser)
+              _buildUserBubble(msg.content)
+            else
+              _buildAssistantText(msg.content),
+            if (_hoveredIndex == index && _editingIndex != index)
+              _buildActionRow(index)
+            else if (_editingIndex != index)
+              const SizedBox(height: 26),
+          ],
+        ),
+      ),
+    );
   }
+
+  Widget _buildActionRow(int index) {
+    final cs = Theme.of(context).colorScheme;
+    final isUser = messages[index].role == 'user';
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isUser)
+            GestureDetector(
+              onTap: () => _startEditing(index),
+              child: Tooltip(
+                message: 'Edit',
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Icon(Icons.edit_outlined,
+                      size: 14, color: cs.onSurface.withAlpha(100)),
+                ),
+              ),
+            ),
+          GestureDetector(
+            onTap: () => _confirmReset(index),
+            child: Tooltip(
+              message: 'Reset to here',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                child: Icon(Icons.restart_alt,
+                    size: 14, color: cs.onSurface.withAlpha(100)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMessageMenu(int index, Offset position) {
+    final isUser = messages[index].role == 'user';
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+          position.dx, position.dy, position.dx + 1, position.dy + 1),
+      items: [
+        if (isUser)
+          const PopupMenuItem(value: 'edit', child: Text('Edit')),
+        const PopupMenuItem(value: 'reset', child: Text('Reset to here')),
+      ],
+    ).then((value) {
+      if (value == 'edit') _startEditing(index);
+      if (value == 'reset') _confirmReset(index);
+    });
+  }
+
+  void _startEditing(int index) {
+    _editController.text = messages[index].content;
+    setState(() => _editingIndex = index);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _editFocusNode.requestFocus();
+    });
+  }
+
+  void _cancelEditing() {
+    setState(() => _editingIndex = null);
+    _editController.clear();
+  }
+
+  void _submitEdit() {
+    final newContent = _editController.text.trim();
+    if (newContent.isEmpty || _editingIndex == null) return;
+    final index = _editingIndex!;
+    _cancelEditing();
+    context.read<ChatState>().editMessage(index, newContent);
+  }
+
+  Widget _buildEditField(int index) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: cs.primary, width: 1.5),
+        ),
+        child: CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.escape): _cancelEditing,
+            const SingleActivator(LogicalKeyboardKey.enter): _submitEdit,
+          },
+          child: TextField(
+            controller: _editController,
+            focusNode: _editFocusNode,
+            style: AppTextStyles.chatBody(context),
+            maxLines: null,
+            autofocus: true,
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _confirmReset(int index) {
+    final chatState = context.read<ChatState>();
+    final isUser = messages[index].role == 'user';
+    final title = isUser
+        ? 'Reset and regenerate?'
+        : 'Reset conversation here?';
+    final body = isUser
+        ? 'All messages after this will be deleted and a new response will be generated.'
+        : 'All messages after this will be deleted.';
+
+    showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text('$body This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed == true) {
+        chatState.resetToMessage(index);
+      }
+    });
+  }
+
+  List<Message> get messages => context.read<ChatState>().messages;
 
   Widget _buildUserBubble(String content) {
     final cs = Theme.of(context).colorScheme;

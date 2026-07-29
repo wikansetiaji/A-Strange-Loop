@@ -103,16 +103,46 @@ class FirestoreService {
         .orderBy('order')
         .get();
     return snapshot.docs
-        .map((doc) => Message.fromMap(doc.data()))
+        .map((doc) => Message.fromMap(doc.data(), id: doc.id))
         .toList();
   }
 
-  Future<void> saveMessage(String sessionId, Message message) async {
-    await _firestore
+  Future<String> saveMessage(String sessionId, Message message) async {
+    final docRef = await _firestore
         .collection('sessions')
         .doc(sessionId)
         .collection('messages')
         .add(message.toMap());
+    return docRef.id;
+  }
+
+  Future<void> updateMessageContent(
+      String sessionId, String firestoreId, String newContent) async {
+    await _firestore
+        .collection('sessions')
+        .doc(sessionId)
+        .collection('messages')
+        .doc(firestoreId)
+        .update({
+      'content': newContent,
+      'timestamp': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  Future<void> deleteMessagesAfterOrder(
+      String sessionId, int afterOrder) async {
+    final snapshot = await _firestore
+        .collection('sessions')
+        .doc(sessionId)
+        .collection('messages')
+        .where('order', isGreaterThan: afterOrder)
+        .get();
+    if (snapshot.docs.isEmpty) return;
+    final batch = _firestore.batch();
+    for (final doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
   }
 
   // ── Search ────────────────────────────────────────────────────

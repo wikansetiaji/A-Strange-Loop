@@ -5,19 +5,22 @@ class Message {
   final String content;
   final DateTime timestamp;
   final int order;
+  final String? firestoreId;
 
   Message({
     required this.role,
     required this.content,
     this.order = 0,
+    this.firestoreId,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 
-  factory Message.fromMap(Map<String, dynamic> map) {
+  factory Message.fromMap(Map<String, dynamic> map, {String? id}) {
     return Message(
       role: map['role'] as String,
       content: map['content'] as String? ?? '',
       order: map['order'] as int? ?? 0,
+      firestoreId: id,
       timestamp: (map['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
