@@ -44,6 +44,7 @@ The app is a reading-companion chatbot. The AI operates against a structured JSO
 | `lib/constants/api_config.dart` | DeepSeek endpoint, model, API key, token limits |
 | `lib/theme/app_theme.dart` | Light/dark themes using Space Grotesk (body) + Syne (display) |
 | `lib/widgets/animations.dart` | Custom animated widgets (PulsingLoop, FloatingDust, TypingBubble, etc.) |
+| `lib/screens/brain_screen.dart` | Full-screen "Reading Brain" view — sectioned card render of the typed brain model |
 
 ## Conventions
 - **No comments** in code unless absolutely necessary.

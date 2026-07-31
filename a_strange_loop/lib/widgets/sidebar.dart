@@ -1,10 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:a_strange_loop/providers/chat_state.dart';
 import 'package:a_strange_loop/models/session.dart';
-import 'package:a_strange_loop/models/brain.dart';
+import 'package:a_strange_loop/screens/brain_screen.dart';
 import 'package:a_strange_loop/widgets/session_tile.dart';
 import 'package:a_strange_loop/widgets/animations.dart';
 import 'package:a_strange_loop/theme/app_theme.dart';
@@ -42,7 +40,7 @@ class _SidebarState extends State<Sidebar> {
         children: [
           _buildNewChatButton(context, cs),
           _buildSearchField(context, colorScheme, cs),
-          _buildBrainButton(context, colorScheme, cs),
+          _buildBrainButton(context, colorScheme),
           Expanded(child: Builder(builder: (_) {
             if (cs.sessions.isEmpty && cs.isSearching) {
               return _buildEmptySearch(context, colorScheme);
@@ -106,14 +104,17 @@ class _SidebarState extends State<Sidebar> {
     );
   }
 
-  Widget _buildBrainButton(
-      BuildContext context, ColorScheme colorScheme, ChatState cs) {
+  Widget _buildBrainButton(BuildContext context, ColorScheme colorScheme) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: SizedBox(
         width: double.infinity,
         child: InkWell(
-          onTap: () => _showBrain(context, cs),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const BrainScreen()),
+            );
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
             decoration: BoxDecoration(
@@ -138,132 +139,6 @@ class _SidebarState extends State<Sidebar> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  String _toMarkdown(String jsonString) {
-    try {
-      final brain = Brain.fromJson(
-          jsonDecode(jsonString) as Map<String, dynamic>);
-      return brain.toMarkdown();
-    } catch (_) {
-      return jsonString;
-    }
-  }
-
-  void _showBrain(BuildContext ctx, ChatState cs) {
-    final brain = cs.brainContent;
-    showDialog(
-      context: ctx,
-      builder: (dCtx) {
-        if (brain != null) {
-          return _buildBrainDialog(dCtx, _toMarkdown(brain));
-        }
-        return FutureBuilder<String>(
-          future: cs.loadBrain(),
-          builder: (_, snapshot) {
-            if (snapshot.hasData) {
-              return _buildBrainDialog(
-                  dCtx, _toMarkdown(snapshot.data!));
-            }
-            return Dialog(
-              backgroundColor:
-                  Theme.of(dCtx).colorScheme.surfaceContainerHigh,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.zero,
-              ),
-              child: SizedBox(
-                height: 200,
-                child: Center(
-                  child: BlockLoader(
-                      color: Theme.of(dCtx).colorScheme.primary),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildBrainDialog(BuildContext ctx, String brainMd) {
-    final colorScheme = Theme.of(ctx).colorScheme;
-    return Dialog(
-      backgroundColor: colorScheme.surfaceContainerHigh,
-      insetPadding: const EdgeInsets.all(16),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
-      ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720, maxHeight: 680),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 8, 0),
-              child: Row(
-                children: [
-                  Icon(Icons.psychology_outlined,
-                      size: 18, color: colorScheme.onSurface.withAlpha(180)),
-                  const SizedBox(width: 8),
-                  Text(
-                    'READING BRAIN',
-                    style: AppTextStyles.display(context).copyWith(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.0,
-                      color: colorScheme.onSurface,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close_sharp, size: 18),
-                    onPressed: () => Navigator.of(ctx).pop(),
-                  ),
-                ],
-              ),
-            ),
-            Container(height: 1, color: colorScheme.outline),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                child: MarkdownBody(
-                  data: brainMd,
-                  selectable: true,
-                  styleSheet: MarkdownStyleSheet(
-                    p: const TextStyle(fontSize: 14, height: 1.6),
-                    h1: AppTextStyles.display(context).copyWith(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: colorScheme.onSurface,
-                      letterSpacing: 0.5,
-                    ),
-                    h2: AppTextStyles.display(context).copyWith(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: colorScheme.onSurface,
-                    ),
-                    h3: AppTextStyles.display(context).copyWith(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.onSurface,
-                    ),
-                    blockquoteDecoration: BoxDecoration(
-                      border: Border(
-                        left: BorderSide(
-                          color: colorScheme.secondary,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
