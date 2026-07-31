@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:a_strange_loop/providers/chat_state.dart';
 import 'package:a_strange_loop/models/session.dart';
+import 'package:a_strange_loop/models/brain.dart';
 import 'package:a_strange_loop/widgets/session_tile.dart';
 import 'package:a_strange_loop/widgets/animations.dart';
 import 'package:a_strange_loop/theme/app_theme.dart';
@@ -141,19 +143,30 @@ class _SidebarState extends State<Sidebar> {
     );
   }
 
+  String _toMarkdown(String jsonString) {
+    try {
+      final brain = Brain.fromJson(
+          jsonDecode(jsonString) as Map<String, dynamic>);
+      return brain.toMarkdown();
+    } catch (_) {
+      return jsonString;
+    }
+  }
+
   void _showBrain(BuildContext ctx, ChatState cs) {
     final brain = cs.brainContent;
     showDialog(
       context: ctx,
       builder: (dCtx) {
         if (brain != null) {
-          return _buildBrainDialog(dCtx, brain);
+          return _buildBrainDialog(dCtx, _toMarkdown(brain));
         }
         return FutureBuilder<String>(
           future: cs.loadBrain(),
           builder: (_, snapshot) {
             if (snapshot.hasData) {
-              return _buildBrainDialog(dCtx, snapshot.data!);
+              return _buildBrainDialog(
+                  dCtx, _toMarkdown(snapshot.data!));
             }
             return Dialog(
               backgroundColor:
@@ -175,7 +188,7 @@ class _SidebarState extends State<Sidebar> {
     );
   }
 
-  Widget _buildBrainDialog(BuildContext ctx, String brain) {
+  Widget _buildBrainDialog(BuildContext ctx, String brainMd) {
     final colorScheme = Theme.of(ctx).colorScheme;
     return Dialog(
       backgroundColor: colorScheme.surfaceContainerHigh,
@@ -218,7 +231,7 @@ class _SidebarState extends State<Sidebar> {
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                 child: MarkdownBody(
-                  data: brain,
+                  data: brainMd,
                   selectable: true,
                   styleSheet: MarkdownStyleSheet(
                     p: const TextStyle(fontSize: 14, height: 1.6),

@@ -1,0 +1,169 @@
+{
+  "version": "1.1",
+  "lastUpdated": "2026-07-26",
+  "meta": {
+    "name": "Wikan",
+    "startedReadingSeriously": "September 2024",
+    "primaryGoal": "Read books that permanently change how I think."
+  },
+  "readerProfile": {
+    "corePhilosophy": "I value books that introduce one profound assumption and explore its consequences with exceptional intellectual discipline.\n\nI prefer inevitability over surprise.\n\nI enjoy books that feel like discovering a theorem rather than consuming a story.",
+    "thingsIConsistentlyLove": [
+      "Epistemology",
+      "Philosophy of Mind",
+      "Consciousness",
+      "Explanation",
+      "Identity",
+      "Recursion",
+      "Civilization",
+      "Mathematics",
+      "Language",
+      "Memory",
+      "Perception"
+    ],
+    "narrativePreferences": {
+      "veryHigh": [
+        "Intellectual exploration",
+        "Thought experiments",
+        "Quiet philosophical novels",
+        "Scientists thinking",
+        "Philosophers thinking",
+        "Civilizations built around ideas"
+      ],
+      "high": [
+        "Hard Science Fiction",
+        "Literary Fiction",
+        "Metafiction"
+      ],
+      "medium": [
+        "Mystery",
+        "Adventure"
+      ],
+      "low": [
+        "Action",
+        "Romance",
+        "Expanding magic systems",
+        "Power escalation"
+      ]
+    }
+  },
+  "readingModes": {
+    "Borges": "Read slowly. Every paragraph matters. Assume every sentence is intentional.",
+    "Lem": "Interrogate every argument. Push back mentally.",
+    "Greg Egan": "Build the model. Follow logical consequences.",
+    "Hofstadter": "Trust the flow. The structure eventually reveals itself.",
+    "Hesse": "Trust accumulation. Listen more than analyze. Ask high-level questions instead of local ones."
+  },
+  "vocabulary": {
+    "Sushi": {
+      "definition": "Books that permanently reshape how I think.",
+      "examples": ["Permutation City", "Ficciones", "His Master's Voice"]
+    },
+    "Pickled Ginger": {
+      "definition": "Books that are enjoyable without fundamentally changing my worldview.",
+      "examples": ["The City & the City"]
+    },
+    "Wikan Shape": {
+      "definition": "One premise. Relentless consequences. Avoid arbitrary expansion.",
+      "examples": []
+    }
+  },
+  "favoriteAuthors": {
+    "tierS": ["Jorge Luis Borges", "Stanisław Lem", "Greg Egan"],
+    "tierA": ["Ted Chiang"]
+  },
+  "favoriteBooks": {
+    "ranked": [
+      "Permutation City",
+      "Ficciones",
+      "Diaspora",
+      "His Master's Voice",
+      "Metamorphosis of Prime Intellect",
+      "Axiomatic",
+      "Fractal Prince",
+      "Blindsight",
+      "The Dark Forest",
+      "Incandescence"
+    ],
+    "favoriteNonfiction": ["I Am a Strange Loop", "The Fabric of Reality"],
+    "favoriteShortStoryCollection": ["Ficciones", "The Cyberiad", "Axiomatic"]
+  },
+  "readerBlindSpots": {
+    "overvalued": ["Big ideas", "Philosophical ambition"],
+    "undervalued": "Character-driven stories and emotional realism \u2014 I value them, but they work best as subtle undercurrents, not primary drivers.",
+    "booksThatChangedMyMind": []
+  },
+  "readingEvolution": [
+    {
+      "year": "2024",
+      "insight": "Thought I primarily loved hard science fiction."
+    },
+    {
+      "year": "2025",
+      "insight": "Discovered Borges. Realized literary style can produce intellectual wonder."
+    },
+    {
+      "year": "2026",
+      "insight": "Realized genre is secondary."
+    },
+    {
+      "year": "Mid-2026",
+      "insight": "Increasingly recognize that intellectual discipline in execution \u2014 not just ambition \u2014 determines whether a book becomes sushi."
+    },
+    {
+      "year": "Current",
+      "insight": "Books are organized by questions, not genres."
+    }
+  ],
+  "activeQuestions": [
+    "What makes a book intellectually inevitable?",
+    "What separates deep exploration from endless worldbuilding?",
+    "Can a novel function as philosophy without sacrificing its literary qualities?",
+    "What makes Borges feel infinitely rereadable?"
+  ],
+  "currentReading": {
+    "book": "The Glass Bead Game",
+    "progress": "33%",
+    "readingStrategy": "Dreamy flow. Still ask questions.",
+    "notes": "Do not rush to understand the Game itself. Instead understand why a civilization would create it.\n\nReflection at 25%: The monastery's inclusion of art resonates with my childhood goal of balancing left and right brain. Noticing that my own reading still leans left \u2014 even this book is being processed as an intellectual structure."
+  },
+  "recommendationQueue": {
+    "highestPriority": [
+      {
+        "book": "G\u00f6del, Escher, Bach",
+        "reason": "Expected to strongly match interests in recursion, consciousness and mathematics."
+      }
+    ],
+    "highConfidence": [
+      {
+        "book": "Pale Fire",
+        "reason": "Literary architecture."
+      }
+    ],
+    "future": []
+  },
+  "observations": [],
+  "books": [
+    {
+      "title": "Permutation City",
+      "status": "Finished",
+      "rating": 5,
+      "personalSignificance": "Permanent Sushi",
+      "whyItMatters": "The definitive example of relentless exploration of one premise."
+    },
+    {
+      "title": "Ficciones",
+      "status": "Finished",
+      "rating": 5,
+      "personalSignificance": "Permanent Sushi",
+      "whyItMatters": "Changed my understanding of literature."
+    },
+    {
+      "title": "The City & the City",
+      "status": "Finished",
+      "rating": 4,
+      "personalSignificance": "Excellent Pickled Ginger",
+      "whyItMatters": "Loved the atmosphere. Wanted the premise to remain the protagonist."
+    }
+  ]
+}

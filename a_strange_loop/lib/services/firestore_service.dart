@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:a_strange_loop/models/session.dart';
 import 'package:a_strange_loop/models/message.dart';
+import 'package:a_strange_loop/models/brain.dart';
 import 'package:a_strange_loop/services/brain_parser.dart';
 
 class FirestoreService {
@@ -8,35 +10,41 @@ class FirestoreService {
 
   Future<String> getBrain() async {
     final doc =
-        await _firestore.collection('meta').doc('brain').get();
+        await _firestore.collection('meta').doc('brain_json').get();
     if (!doc.exists) {
-      throw Exception('Brain document not found at meta/brain');
+      throw Exception('Brain document not found at meta/brain_json');
     }
-    return doc.data()?['markdown_content'] ?? '';
+    return doc.data()?['content'] ?? '';
   }
 
-  Future<void> uploadBrain(String markdownContent) async {
-    await _firestore.collection('meta').doc('brain').set({
-      'markdown_content': markdownContent,
+  Future<void> uploadBrain(String jsonContent) async {
+    final bookCount = _countBooks(jsonContent);
+    await _firestore.collection('meta').doc('brain_json').set({
+      'content': jsonContent,
       'updated_at': FieldValue.serverTimestamp(),
-      'book_count': _countBooks(markdownContent),
+      'book_count': bookCount,
     });
   }
 
-  int _countBooks(String markdown) {
-    final matches = RegExp(r'^# BOOK$', multiLine: true).allMatches(markdown);
-    return matches.length;
+  int _countBooks(String jsonContent) {
+    try {
+      final brain =
+          Brain.fromJson(jsonDecode(jsonContent) as Map<String, dynamic>);
+      return brain.books.length;
+    } catch (_) {
+      return 0;
+    }
   }
 
   Future<void> updateBrain(
-      String markdownContent, List<PatchLogEntry> patchLog) async {
-    final brainRef = _firestore.collection('meta').doc('brain');
+      String jsonContent, List<PatchLogEntry> patchLog) async {
+    final brainRef = _firestore.collection('meta').doc('brain_json');
     final batch = _firestore.batch();
 
     batch.set(brainRef, {
-      'markdown_content': markdownContent,
+      'content': jsonContent,
       'updated_at': FieldValue.serverTimestamp(),
-      'book_count': _countBooks(markdownContent),
+      'book_count': _countBooks(jsonContent),
     }, SetOptions(merge: true));
 
     for (final entry in patchLog) {

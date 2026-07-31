@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:a_strange_loop/models/message.dart';
 import 'package:a_strange_loop/models/session.dart';
+import 'package:a_strange_loop/models/brain.dart';
 import 'package:a_strange_loop/services/firestore_service.dart';
 import 'package:a_strange_loop/services/ai_service.dart';
 import 'package:a_strange_loop/services/brain_parser.dart';
@@ -48,7 +50,7 @@ class ChatState extends ChangeNotifier {
     try {
       await _firestore.getBrain();
     } catch (_) {
-      final brain = await rootBundle.loadString('assets/reading_brain.md');
+      final brain = await rootBundle.loadString('assets/reading_brain.json');
       await _firestore.uploadBrain(brain);
     }
   }
@@ -378,11 +380,11 @@ class ChatState extends ChangeNotifier {
 
   static int _findBlockMarker(String text) {
     const markers = [
-      'BEGIN_APPEND_BOOK',
-      'BEGIN_UPDATE_BOOK',
-      'BEGIN_DELETE_BOOK',
-      'BEGIN_PATCH',
-      'BEGIN_OBSERVATION',
+      'BEGIN_JSON_APPEND_BOOK',
+      'BEGIN_JSON_UPDATE_BOOK',
+      'BEGIN_JSON_DELETE_BOOK',
+      'BEGIN_JSON_PATCH',
+      'BEGIN_JSON_OBSERVATION',
     ];
     for (final marker in markers) {
       final idx = text.length >= marker.length
@@ -486,24 +488,22 @@ class ChatState extends ChangeNotifier {
     return brain;
   }
 
-  void _parseCurrentReading(String brain) {
-    final section = RegExp(
-      r'## CURRENT_READING\n((?:.|\n)*?)(?=\n## |\Z)',
-    ).firstMatch(brain)?.group(1);
-    if (section == null) {
+  void _parseCurrentReading(String brainJson) {
+    try {
+      final brain = Brain.fromJson(
+          jsonDecode(brainJson) as Map<String, dynamic>);
+      final cr = brain.currentReading;
+      if (cr != null && cr.isNotEmpty) {
+        currentBookTitle = cr.book;
+        currentBookProgress = cr.progress.isNotEmpty ? cr.progress : null;
+      } else {
+        currentBookTitle = null;
+        currentBookProgress = null;
+      }
+    } catch (_) {
       currentBookTitle = null;
       currentBookProgress = null;
-      return;
     }
-
-    final titleMatch =
-        RegExp(r'^Book:\s*\n\s*(.+)$', multiLine: true).firstMatch(section);
-    currentBookTitle = titleMatch?.group(1)?.trim();
-
-    final progressMatch =
-        RegExp(r'^Progress:\s*\n\s*(.+)$', multiLine: true)
-            .firstMatch(section);
-    currentBookProgress = progressMatch?.group(1)?.trim();
   }
 
   String _buildPrompt(String brain, List<Message> msgs) {

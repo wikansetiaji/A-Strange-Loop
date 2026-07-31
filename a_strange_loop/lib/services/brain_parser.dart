@@ -1,14 +1,17 @@
+import 'dart:convert';
+import 'package:a_strange_loop/models/brain.dart';
+
 enum BlockType { appendBook, updateBook, deleteBook, patch, observation }
 
 class OperationBlock {
   final BlockType type;
   final String rawText;
-  final Map<String, String> fields;
+  final Map<String, dynamic> jsonData;
 
   const OperationBlock({
     required this.type,
     required this.rawText,
-    required this.fields,
+    required this.jsonData,
   });
 }
 
@@ -35,21 +38,19 @@ class PatchLogEntry {
 
 class BrainParser {
   static const _blockTypes = {
-    'APPEND_BOOK': BlockType.appendBook,
-    'UPDATE_BOOK': BlockType.updateBook,
-    'DELETE_BOOK': BlockType.deleteBook,
-    'PATCH': BlockType.patch,
-    'OBSERVATION': BlockType.observation,
+    'JSON_APPEND_BOOK': BlockType.appendBook,
+    'JSON_UPDATE_BOOK': BlockType.updateBook,
+    'JSON_DELETE_BOOK': BlockType.deleteBook,
+    'JSON_PATCH': BlockType.patch,
+    'JSON_OBSERVATION': BlockType.observation,
   };
 
   static final _blockRegex = RegExp(
-    r'BEGIN_(APPEND_BOOK|UPDATE_BOOK|DELETE_BOOK|PATCH|OBSERVATION)\n'
+    r'BEGIN_(JSON_APPEND_BOOK|JSON_UPDATE_BOOK|JSON_DELETE_BOOK|JSON_PATCH|JSON_OBSERVATION)\n'
     r'(.*?)'
     r'\nEND_\1',
     dotAll: true,
   );
-
-  // ── Parse ────────────────────────────────────────────────────
 
   static ParsedResponse parse(String rawResponse) {
     final blocks = <OperationBlock>[];
@@ -58,11 +59,18 @@ class BrainParser {
 
     for (final match in _blockRegex.allMatches(rawResponse)) {
       final typeStr = match.group(1)!;
-      final body = match.group(2)!;
+      final body = match.group(2)!.trim();
       final type = _blockTypes[typeStr]!;
-      final fields = _parseBlockFields(type, body);
+
+      Map<String, dynamic> jsonData;
+      try {
+        jsonData = jsonDecode(body) as Map<String, dynamic>;
+      } catch (_) {
+        jsonData = <String, dynamic>{};
+      }
+
       blocks.add(OperationBlock(
-          type: type, rawText: match.group(0)!, fields: fields));
+          type: type, rawText: match.group(0)!, jsonData: jsonData));
 
       final before = rawResponse.substring(lastEnd, match.start);
       proseParts.add(before);
@@ -80,448 +88,252 @@ class BrainParser {
     return ParsedResponse(prose: prose, blocks: blocks);
   }
 
-  static Map<String, String> _parseBlockFields(BlockType type, String body) {
-    switch (type) {
-      case BlockType.appendBook:
-        return _parseFields(body.replaceFirst('# BOOK', ''));
-
-      case BlockType.updateBook:
-        return _parseFields(body.replaceFirst('# BOOK', ''));
-
-      case BlockType.deleteBook:
-        return _parseFields(body);
-
-      case BlockType.patch:
-        return _parseFields(body, multiLineField: 'Replacement Content');
-
-      case BlockType.observation:
-        return _parseFields(body);
-    }
-  }
-
-  static Map<String, String> _parseFields(String body,
-      {String? multiLineField}) {
-    final fields = <String, String>{};
-    final lines = body.split('\n');
-
-    String? currentKey;
-    final currentValue = <String>[];
-
-    for (int i = 0; i < lines.length; i++) {
-      final line = lines[i];
-      final trimmed = line.trim();
-      if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
-
-      final inlineMatch =
-          RegExp(r"^([A-Z][\w\s]+):\s+(.+)$").firstMatch(trimmed);
-      if (inlineMatch != null) {
-        if (currentKey != null && currentValue.isNotEmpty) {
-          fields[currentKey] = currentValue.join('\n').trim();
-          currentValue.clear();
-        }
-        final key = inlineMatch.group(1)!.trim();
-        final value = inlineMatch.group(2)!.trim();
-
-        if (key == multiLineField) {
-          final remaining = <String>[];
-          for (int j = i + 1; j < lines.length; j++) {
-            remaining.add(lines[j]);
-          }
-          fields[key] = remaining.join('\n').trim();
-          return fields;
-        }
-
-        fields[key] = value;
-        currentKey = null;
-        continue;
-      }
-
-      final keyOnlyMatch =
-          RegExp(r"^([A-Z][\w\s]+):\s*$").firstMatch(trimmed);
-      if (keyOnlyMatch != null) {
-        if (currentKey != null && currentValue.isNotEmpty) {
-          fields[currentKey] = currentValue.join('\n').trim();
-          currentValue.clear();
-        }
-        currentKey = keyOnlyMatch.group(1)!.trim();
-
-        if (currentKey == multiLineField) {
-          final remaining = <String>[];
-          for (int j = i + 1; j < lines.length; j++) {
-            remaining.add(lines[j]);
-          }
-          fields[currentKey] = remaining.join('\n').trim();
-          return fields;
-        }
-        continue;
-      }
-
-      if (currentKey != null) {
-        currentValue.add(line);
-      }
-    }
-
-    if (currentKey != null && currentValue.isNotEmpty) {
-      fields[currentKey] = currentValue.join('\n').trim();
-    }
-
-    return fields;
-  }
-
-  // ── Apply ────────────────────────────────────────────────────
-
-  static BrainUpdate applyBlocks(String brain, List<OperationBlock> blocks) {
+  static BrainUpdate applyBlocks(
+      String brainJson, List<OperationBlock> blocks) {
     final log = <PatchLogEntry>[];
-    String result = brain;
-    final evidenceDates = <String>[];
+    Brain brain;
+    try {
+      brain = Brain.fromJson(jsonDecode(brainJson) as Map<String, dynamic>);
+    } catch (_) {
+      return BrainUpdate(brain: brainJson, log: log);
+    }
 
     for (final block in blocks) {
       switch (block.type) {
         case BlockType.appendBook:
-          result = _appendBook(result, block.fields);
-          final title = block.fields['Title'] ?? 'Unknown';
-          log.add(PatchLogEntry(operation: 'APPEND_BOOK', target: title));
+          try {
+            final book =
+                Book.fromJson(block.jsonData);
+            brain.books.add(book);
+            log.add(PatchLogEntry(
+                operation: 'APPEND_BOOK', target: book.title));
+          } catch (_) {}
           break;
 
         case BlockType.updateBook:
-          final target = block.fields['Target Title'] ?? '';
-          if (target.isEmpty) break;
-          result = _updateBook(result, target, block.fields);
-          log.add(PatchLogEntry(operation: 'UPDATE_BOOK', target: target));
+          try {
+            final targetTitle =
+                block.jsonData['targetTitle'] as String? ?? '';
+            final bookJson = block.jsonData['book'] as Map<String, dynamic>?;
+            if (targetTitle.isEmpty || bookJson == null) break;
+            final book = Book.fromJson(bookJson);
+            final idx = brain.books
+                .indexWhere((b) => b.title == targetTitle);
+            if (idx != -1) {
+              brain.books[idx] = book;
+              log.add(PatchLogEntry(
+                  operation: 'UPDATE_BOOK', target: targetTitle));
+            }
+          } catch (_) {}
           break;
 
         case BlockType.deleteBook:
-          final target = block.fields['Target Title'] ?? '';
-          if (target.isEmpty) break;
-          result = _deleteBook(result, target);
-          log.add(PatchLogEntry(operation: 'DELETE_BOOK', target: target));
+          try {
+            final targetTitle =
+                block.jsonData['targetTitle'] as String? ?? '';
+            if (targetTitle.isEmpty) break;
+            brain.books.removeWhere((b) => b.title == targetTitle);
+            log.add(PatchLogEntry(
+                operation: 'DELETE_BOOK', target: targetTitle));
+          } catch (_) {}
           break;
 
         case BlockType.patch:
-          final section = block.fields['Target Section'] ?? '';
-          final content = block.fields['Replacement Content'] ?? '';
-          final reason = block.fields['Reason'];
-          final conf =
-              double.tryParse(block.fields['Confidence'] ?? '');
-          if (section.isEmpty || content.isEmpty) break;
-          result = _applyPatch(result, section, content);
-          final targetLabel = section.contains('.')
-              ? section
-              : _pascalToTitle(section);
-          log.add(PatchLogEntry(
-            operation: 'PATCH',
-            target: targetLabel,
-            reason: reason,
-            confidence: conf,
-          ));
-          final evidence = block.fields['Evidence'] ?? '';
-          _collectDates(evidence, evidenceDates);
+          try {
+            final targetSection =
+                block.jsonData['targetSection'] as String? ?? '';
+            final replacementContent = block.jsonData['replacementContent'];
+            final reason = block.jsonData['reason'] as String?;
+            final confidence =
+                (block.jsonData['confidence'] as num?)?.toDouble();
+            if (targetSection.isEmpty || replacementContent == null) break;
+
+            _applyJsonPatch(brain, targetSection, replacementContent);
+            log.add(PatchLogEntry(
+              operation: 'PATCH',
+              target: targetSection,
+              reason: reason,
+              confidence: confidence,
+            ));
+          } catch (_) {}
           break;
 
         case BlockType.observation:
-          result = _appendObservation(result, block.fields);
-          final hypothesis = block.fields['Hypothesis'] ?? 'Unknown';
-          final conf =
-              double.tryParse(block.fields['Confidence'] ?? '');
-          log.add(PatchLogEntry(
-            operation: 'OBSERVATION',
-            target: hypothesis,
-            confidence: conf,
-          ));
+          try {
+            final evidence =
+                block.jsonData['evidence'] as String? ?? '';
+            final hypothesis =
+                block.jsonData['hypothesis'] as String? ?? '';
+            final confidence =
+                (block.jsonData['confidence'] as num?)?.toDouble() ?? 0.0;
+            final logged =
+                block.jsonData['logged'] as String? ?? '';
+
+            final matching = brain.observations
+                .where((o) => _similarHypotheses(o.hypothesis, hypothesis))
+                .toList();
+
+            if (matching.length >= 2) {
+              final evidenceDates =
+                  matching.map((o) => o.logged).toList();
+              brain.observations
+                  .removeWhere((o) => evidenceDates.contains(o.logged));
+            } else {
+              brain.observations.add(ObservationEntry(
+                evidence: evidence,
+                hypothesis: hypothesis,
+                confidence: confidence,
+                logged: logged,
+              ));
+            }
+
+            log.add(PatchLogEntry(
+              operation: 'OBSERVATION',
+              target: hypothesis,
+              confidence: confidence,
+            ));
+          } catch (_) {}
           break;
       }
     }
 
-    if (evidenceDates.isNotEmpty) {
-      result = _removeObservationsByDate(result, evidenceDates);
-    }
+    brain.lastUpdated = _todayString();
 
-    return BrainUpdate(brain: result, log: log);
-  }
-
-  // ── BOOK Operations ──────────────────────────────────────────
-
-  static String _appendBook(String brain, Map<String, String> fields) {
-    final booksIdx = brain.indexOf('## BOOKS\n');
-    if (booksIdx == -1) return brain;
-
-    final booksContent = brain.substring(booksIdx + '## BOOKS\n'.length);
-
-    final entryRegex = RegExp(
-      r'\n---\n# BOOK\n.*?(?=\n---\n# BOOK\n|$)',
-      dotAll: true,
+    return BrainUpdate(
+      brain: const JsonEncoder.withIndent('  ').convert(brain.toJson()),
+      log: log,
     );
-    final matches = entryRegex.allMatches(booksContent).toList();
-    final insertIdx = matches.isNotEmpty
-        ? booksIdx + '## BOOKS\n'.length + matches.last.end
-        : booksIdx + '## BOOKS\n'.length;
-
-    final entry = _buildBookEntry(fields);
-    return '${brain.substring(0, insertIdx)}'
-        '\n---\n$entry\n'
-        '${brain.substring(insertIdx)}';
   }
 
-  static String _updateBook(
-      String brain, String targetTitle, Map<String, String> fields) {
-    final entry = _findBookEntry(brain, targetTitle);
-    if (entry == null) return brain;
+  static void _applyJsonPatch(
+      Brain brain, String targetSection, dynamic replacementContent) {
+    final parts = targetSection.split('.');
+    final section = parts[0];
+    final subsection = parts.length > 1 ? parts.sublist(1).join('_') : null;
 
-    final (start, end) = entry;
-    final newEntry = _buildBookEntry(fields);
-    return '${brain.substring(0, start)}\n---\n$newEntry${brain.substring(end)}';
-  }
+    switch (section) {
+      case 'META':
+        if (subsection == null && replacementContent is Map<String, dynamic>) {
+          brain.meta = BrainMeta.fromJson(replacementContent);
+        }
+        break;
 
-  static String _deleteBook(String brain, String targetTitle) {
-    final entry = _findBookEntry(brain, targetTitle);
-    if (entry == null) return brain;
+      case 'READER_PROFILE':
+        if (subsection == null && replacementContent is Map<String, dynamic>) {
+          brain.readerProfile = ReaderProfile.fromJson(replacementContent);
+        } else if (subsection == 'CORE_PHILOSOPHY' &&
+            replacementContent is String) {
+          brain.readerProfile.corePhilosophy = replacementContent;
+        } else if (subsection == 'THINGS_I_CONSISTENTLY_LOVE' &&
+            replacementContent is List) {
+          brain.readerProfile.thingsIConsistentlyLove =
+              replacementContent.cast<String>();
+        } else if (subsection == 'NARRATIVE_PREFERENCES' &&
+            replacementContent is Map<String, dynamic>) {
+          brain.readerProfile.narrativePreferences =
+              NarrativePreferences.fromJson(replacementContent);
+        }
+        break;
 
-    final (start, end) = entry;
-    return '${brain.substring(0, start)}${brain.substring(end)}';
-  }
+      case 'READING_MODES':
+        if (replacementContent is Map<String, dynamic>) {
+          brain.readingModes =
+              replacementContent.map((k, v) => MapEntry(k, v as String));
+        }
+        break;
 
-  static (int, int)? _findBookEntry(String brain, String targetTitle) {
-    final booksIdx = brain.indexOf('## BOOKS\n');
-    if (booksIdx == -1) return null;
+      case 'VOCABULARY':
+        if (replacementContent is Map<String, dynamic>) {
+          brain.vocabulary = replacementContent.map(
+              (k, v) => MapEntry(
+                  k,
+                  v is Map<String, dynamic>
+                      ? VocabularyTerm.fromJson(v)
+                      : VocabularyTerm(definition: v as String)));
+        }
+        break;
 
-    final booksContent = brain.substring(booksIdx + '## BOOKS\n'.length);
-    final entryRegex = RegExp(
-      r'(\n---\n# BOOK\n)(.*?)(?=\n---\n# BOOK\n|$)',
-      dotAll: true,
-    );
+      case 'FAVORITE_AUTHORS':
+        if (replacementContent is Map<String, dynamic>) {
+          brain.favoriteAuthors =
+              FavoriteAuthors.fromJson(replacementContent);
+        }
+        break;
 
-    for (final match in entryRegex.allMatches(booksContent)) {
-      final content = match.group(2) ?? '';
-      final titleRegex = RegExp(r'Title:\s*\n+\s*(.+)');
-      final titleMatch = titleRegex.firstMatch(content);
-      if (titleMatch != null &&
-          titleMatch.group(1)!.trim() == targetTitle) {
-        final start = booksIdx + '## BOOKS\n'.length + match.start;
-        final end = booksIdx + '## BOOKS\n'.length + match.end;
-        return (start, end);
-      }
-    }
+      case 'FAVORITE_BOOKS':
+        if (replacementContent is Map<String, dynamic>) {
+          brain.favoriteBooks =
+              FavoriteBooks.fromJson(replacementContent);
+        }
+        break;
 
-    return null;
-  }
+      case 'READER_BLIND_SPOTS':
+        if (replacementContent is Map<String, dynamic>) {
+          brain.readerBlindSpots =
+              ReaderBlindSpots.fromJson(replacementContent);
+        }
+        break;
 
-  static String _buildBookEntry(Map<String, String> fields) {
-    final buf = StringBuffer();
-    buf.writeln('# BOOK');
-    buf.writeln();
+      case 'READING_EVOLUTION':
+        if (replacementContent is List) {
+          brain.readingEvolution = replacementContent
+              .map((e) =>
+                  EvolutionEntry.fromJson(e as Map<String, dynamic>))
+              .toList();
+        }
+        break;
 
-    for (final entry in fields.entries) {
-      if (entry.key == 'Target Title') continue;
-      buf.writeln('${entry.key}:');
-      buf.writeln();
-      buf.writeln(entry.value);
-      buf.writeln();
-    }
+      case 'ACTIVE_QUESTIONS':
+        if (replacementContent is List) {
+          brain.activeQuestions = replacementContent.cast<String>();
+        }
+        break;
 
-    return buf.toString();
-  }
+      case 'CURRENT_READING':
+        if (replacementContent == null ||
+            (replacementContent is Map && replacementContent.isEmpty)) {
+          brain.currentReading = null;
+        } else if (replacementContent is Map<String, dynamic>) {
+          brain.currentReading =
+              CurrentReading.fromJson(replacementContent);
+        }
+        break;
 
-  // ── PATCH Operation ──────────────────────────────────────────
+      case 'RECOMMENDATION_QUEUE':
+        if (replacementContent is Map<String, dynamic>) {
+          brain.recommendationQueue =
+              RecommendationQueue.fromJson(replacementContent);
+        }
+        break;
 
-  static String _applyPatch(
-      String brain, String targetSection, String replacementContent) {
-    if (targetSection.contains('.')) {
-      final parts = targetSection.split('.');
-      final sectionName = parts[0];
-      final subsectionName = parts.sublist(1).join(' ');
-      final subsectionSpaces =
-          subsectionName.replaceAll('_', ' ');
-      return _applySubsectionPatch(
-          brain, sectionName, subsectionSpaces, replacementContent);
-    }
-
-    return _applySectionPatch(brain, targetSection, replacementContent);
-  }
-
-  static String _applySectionPatch(
-      String brain, String sectionName, String content) {
-    final header = '## $sectionName\n';
-    final headerIdx = brain.indexOf(header);
-    if (headerIdx == -1) return brain;
-
-    final afterHeader = headerIdx + header.length;
-    final rest = brain.substring(afterHeader);
-
-    final nextHeaderRegex = RegExp(r'\n## |\n(?=---\n# BOOK)');
-    final nextHeaderMatch = nextHeaderRegex.firstMatch(rest);
-    final sectionEnd = nextHeaderMatch != null
-        ? afterHeader + nextHeaderMatch.start
-        : brain.length;
-
-    return '${brain.substring(0, afterHeader)}\n'
-        '${content.trim()}\n'
-        '${brain.substring(sectionEnd)}';
-  }
-
-  static String _applySubsectionPatch(String brain, String sectionName,
-      String subsectionName, String content) {
-    final sectionHeader = '## $sectionName\n';
-    final sectionIdx = brain.indexOf(sectionHeader);
-    if (sectionIdx == -1) return brain;
-
-    final afterSection = sectionIdx + sectionHeader.length;
-    final rest = brain.substring(afterSection);
-
-    final nextMajorHeader = RegExp(r'\n## |\n(?=---\n# BOOK)');
-    final nextHeaderMatch = nextMajorHeader.firstMatch(rest);
-    final sectionEnd = nextHeaderMatch != null
-        ? afterSection + nextHeaderMatch.start
-        : brain.length;
-
-    final sectionBody = brain.substring(afterSection, sectionEnd);
-
-    final subPattern =
-        RegExp(r'###\s+' + RegExp.escape(subsectionName) + r'\b',
-            caseSensitive: false);
-    final subMatch = subPattern.firstMatch(sectionBody);
-    if (subMatch == null) return brain;
-
-    final subStart = afterSection + subMatch.end;
-
-    final nextSubRegex = RegExp(r'\n### ');
-    final nextSubMatch = nextSubRegex.firstMatch(
-      sectionBody.substring(subMatch.end),
-    );
-    final subEnd = nextSubMatch != null
-        ? afterSection + subMatch.end + nextSubMatch.start
-        : sectionEnd;
-
-    return '${brain.substring(0, subStart)}\n\n'
-        '${content.trim()}\n'
-        '${brain.substring(subEnd)}';
-  }
-
-  // ── OBSERVATION Operations ───────────────────────────────────
-
-  static String _cleanSectionBody(String body) {
-    body = body.replaceAll('(empty)', '');
-    body = body.trimRight();
-    if (body.endsWith('---')) {
-      body = body.substring(0, body.lastIndexOf('---')).trimRight();
-    }
-    return body.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
-  }
-
-  static String _appendObservation(
-      String brain, Map<String, String> fields) {
-    final header = '## OBSERVATIONS\n';
-    final headerIdx = brain.indexOf(header);
-    if (headerIdx == -1) return brain;
-
-    final afterHeader = headerIdx + header.length;
-    final rest = brain.substring(afterHeader);
-
-    final nextSection = RegExp(r'\n## |\n(?=---\n# BOOK)');
-    final nextMatch = nextSection.firstMatch(rest);
-    final sectionEnd =
-        nextMatch != null ? afterHeader + nextMatch.start : brain.length;
-
-    var sectionBody = brain.substring(afterHeader, sectionEnd);
-
-    if (sectionBody.contains('(No observations logged yet')) {
-      sectionBody = sectionBody
-          .split('\n')
-          .where((l) => !l.contains('(No observations logged yet'))
-          .join('\n');
-    }
-
-    sectionBody = _cleanSectionBody(sectionBody);
-
-    final entry = _buildObservationEntry(fields);
-    if (sectionBody.isNotEmpty) {
-      sectionBody = '$sectionBody\n\n---\n$entry\n\n(empty)';
-    } else {
-      sectionBody = '---\n$entry\n\n(empty)';
-    }
-
-    return '${brain.substring(0, afterHeader)}\n'
-        '$sectionBody\n'
-        '${brain.substring(sectionEnd)}';
-  }
-
-  static String _buildObservationEntry(Map<String, String> fields) {
-    final buf = StringBuffer();
-    for (final key in ['Evidence', 'Hypothesis', 'Confidence', 'Logged']) {
-      final value = fields[key];
-      if (value != null) {
-        buf.writeln('$key:');
-        buf.writeln();
-        buf.writeln(value);
-        buf.writeln();
-      }
-    }
-    return buf.toString();
-  }
-
-  static void _collectDates(String evidence, List<String> dates) {
-    final dateRegex = RegExp(r'\d{4}-\d{2}-\d{2}');
-    for (final match in dateRegex.allMatches(evidence)) {
-      final date = match.group(0)!;
-      if (!dates.contains(date)) dates.add(date);
+      case 'OBSERVATIONS':
+        if (replacementContent is List) {
+          brain.observations = replacementContent
+              .map((e) =>
+                  ObservationEntry.fromJson(e as Map<String, dynamic>))
+              .toList();
+        }
+        break;
     }
   }
 
-  static String _removeObservationsByDate(
-      String brain, List<String> dates) {
-    if (dates.isEmpty) return brain;
+  static bool _similarHypotheses(String a, String b) {
+    final normA = a.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), '');
+    final normB = b.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), '');
+    if (normA == normB) return true;
 
-    final header = '## OBSERVATIONS\n';
-    final headerIdx = brain.indexOf(header);
-    if (headerIdx == -1) return brain;
-
-    final afterHeader = headerIdx + header.length;
-    final rest = brain.substring(afterHeader);
-
-    final nextSection = RegExp(r'\n## |\n(?=---\n# BOOK)');
-    final nextMatch = nextSection.firstMatch(rest);
-    final sectionEnd =
-        nextMatch != null ? afterHeader + nextMatch.start : brain.length;
-
-    final sectionBody = brain.substring(afterHeader, sectionEnd);
-
-    final entryRegex = RegExp(
-      r'(\n---\n)(.*?)(?=\n---\n|\n\(empty\)|$)',
-      dotAll: true,
-    );
-
-    String cleaned = sectionBody;
-    for (final match
-        in entryRegex.allMatches(sectionBody).toList().reversed) {
-      final content = match.group(2) ?? '';
-      final loggedRegex = RegExp(r'Logged:\s*\n+\s*(\d{4}-\d{2}-\d{2})');
-      final loggedMatch = loggedRegex.firstMatch(content);
-      if (loggedMatch != null &&
-          dates.contains(loggedMatch.group(1)!.trim())) {
-        cleaned = cleaned.replaceFirst(match.group(0)!, '');
-      }
-    }
-
-    cleaned = _cleanSectionBody(cleaned);
-
-    if (!cleaned.contains('---')) {
-      cleaned = '(empty)';
-    } else {
-      cleaned = '$cleaned\n\n(empty)';
-    }
-
-    return '${brain.substring(0, afterHeader)}\n'
-        '$cleaned\n'
-        '${brain.substring(sectionEnd)}';
+    final wordsA = normA.split(RegExp(r'\s+')).toSet();
+    final wordsB = normB.split(RegExp(r'\s+')).toSet();
+    if (wordsA.length < 3 || wordsB.length < 3) return false;
+    final intersection = wordsA.intersection(wordsB).length;
+    final union = wordsA.union(wordsB).length;
+    return intersection / union >= 0.7;
   }
 
-  // ── Helpers ──────────────────────────────────────────────────
-
-  static String _pascalToTitle(String pascal) {
-    final words = pascal.split('_').map((w) {
-      if (w.isEmpty) return w;
-      return w[0].toUpperCase() + w.substring(1).toLowerCase();
-    }).join(' ');
-    return words;
+  static String _todayString() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}'
+        '-${now.day.toString().padLeft(2, '0')}';
   }
 }
 

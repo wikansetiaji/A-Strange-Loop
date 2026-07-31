@@ -21,9 +21,10 @@ firebase deploy --only hosting   # deploy to Firebase Hosting
 - **AI**: calls DeepSeek API (`deepseek-v4-flash`) directly via `http` package. Streaming support in `ai_service.dart`.
 
 ## Core concept — "Reading Brain"
-The app is a reading-companion chatbot. The AI operates against a structured markdown file called the "Reading Brain" stored in Firestore (`meta/brain`) and seeded from `assets/reading_brain.md`.
-- The **system prompt** (`constants/system_prompt.dart`) defines the AI's personality, write triggers, and operation block syntax.
-- The **brain parser** (`services/brain_parser.dart`) parses AI responses for operation blocks (`BEGIN_APPEND_BOOK`…`END_APPEND_BOOK`, `BEGIN_PATCH`…`END_PATCH`, `BEGIN_OBSERVATION`…`END_OBSERVATION`), separates them from visible prose during streaming, and applies mutations to the Firestore brain document.
+The app is a reading-companion chatbot. The AI operates against a structured JSON file called the "Reading Brain" stored in Firestore (`meta/brain_json`) and seeded from `assets/reading_brain.json`. The original markdown brain is kept at `meta/brain` as a backup.
+- The **brain model** (`models/brain.dart`) defines typed Dart classes with `fromJson`/`toJson`/`toMarkdown()`.
+- The **system prompt** (`constants/system_prompt.dart`) defines the AI's personality, write triggers, and JSON operation block syntax.
+- The **brain parser** (`services/brain_parser.dart`) parses AI responses for JSON operation blocks (`BEGIN_JSON_APPEND_BOOK`…`END_JSON_APPEND_BOOK`, `BEGIN_JSON_PATCH`…`END_JSON_PATCH`, `BEGIN_JSON_OBSERVATION`…`END_JSON_OBSERVATION`), separates them from visible prose during streaming, and applies mutations to the Firestore brain document.
 - Any change to `system_prompt.dart` or `brain_parser.dart` must keep them consistent — the parser's grammar mirrors the prompt's block syntax exactly.
 
 ## Secrets (do not modify carelessly)
@@ -35,10 +36,11 @@ The app is a reading-companion chatbot. The AI operates against a structured mar
 |------|---------|
 | `lib/main.dart` | Entry point, Firebase init, ChatState provider, auth gate |
 | `lib/providers/chat_state.dart` | Central state: sessions, messages, brain cache, AI call orchestration |
+| `lib/models/brain.dart` | Typed brain model: Brain, Book, Observation, etc. with `fromJson`/`toJson`/`toMarkdown` |
 | `lib/services/ai_service.dart` | DeepSeek API: summarize, generateTitle, sendMessageStream |
-| `lib/services/brain_parser.dart` | Parses AI block responses and mutates the brain markdown |
-| `lib/services/firestore_service.dart` | All Firestore CRUD (brain, sessions, messages) |
-| `lib/constants/system_prompt.dart` | Full AI system prompt (~360 lines) |
+| `lib/services/brain_parser.dart` | Parses AI JSON block responses and mutates the brain |
+| `lib/services/firestore_service.dart` | All Firestore CRUD (brain_json, sessions, messages) |
+| `lib/constants/system_prompt.dart` | Full AI system prompt (~340 lines) |
 | `lib/constants/api_config.dart` | DeepSeek endpoint, model, API key, token limits |
 | `lib/theme/app_theme.dart` | Light/dark themes using Space Grotesk (body) + Syne (display) |
 | `lib/widgets/animations.dart` | Custom animated widgets (PulsingLoop, FloatingDust, TypingBubble, etc.) |
