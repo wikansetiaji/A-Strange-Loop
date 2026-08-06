@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
@@ -8,6 +11,7 @@ import 'package:a_strange_loop/models/message.dart';
 import 'package:a_strange_loop/widgets/sidebar.dart';
 import 'package:a_strange_loop/widgets/animations.dart';
 import 'package:a_strange_loop/theme/app_theme.dart';
+import 'package:a_strange_loop/screens/settings_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -29,6 +33,23 @@ class _ChatScreenState extends State<ChatScreen> {
   int? _editingIndex;
   final TextEditingController _editController = TextEditingController();
   final FocusNode _editFocusNode = FocusNode();
+
+  bool _thinkingExpanded = true;
+
+  static List<_DisplayItem> _buildDisplayItems(ChatState state) {
+    final items = <_DisplayItem>[];
+    for (int i = 0; i < state.messages.length; i++) {
+      items.add(_DisplayItem.message(i));
+    }
+    if (state.streamingThinking != null &&
+        state.streamingThinking!.isNotEmpty) {
+      items.add(_DisplayItem.streamingThinking());
+    }
+    if (state.streamingContent != null) {
+      items.add(_DisplayItem.streaming());
+    }
+    return items;
+  }
 
   @override
   void initState() {
@@ -150,6 +171,17 @@ class _ChatScreenState extends State<ChatScreen> {
       centerTitle: false,
       titleSpacing: isWide ? 20 : 0,
       actions: [
+        IconButton(
+          icon: Icon(Icons.settings_outlined, size: 18,
+              color: cs.onSurface.withAlpha(120)),
+          tooltip: 'Settings',
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                  builder: (_) => const SettingsScreen()),
+            );
+          },
+        ),
         if (!isWide)
           IconButton(
             icon: Icon(Icons.edit_sharp, size: 18, color: cs.primary),
@@ -159,12 +191,13 @@ class _ChatScreenState extends State<ChatScreen> {
               context.read<ChatState>().createNewSession();
             },
           ),
-        IconButton(
-          icon: Icon(Icons.logout_sharp, size: 18,
-              color: cs.onSurface.withAlpha(120)),
-          tooltip: 'Sign out',
-          onPressed: () => FirebaseAuth.instance.signOut(),
-        ),
+        if (!kDebugMode)
+          IconButton(
+            icon: Icon(Icons.logout_sharp, size: 18,
+                color: cs.onSurface.withAlpha(120)),
+            tooltip: 'Sign out',
+            onPressed: () => FirebaseAuth.instance.signOut(),
+          ),
       ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
@@ -201,8 +234,8 @@ class _ChatScreenState extends State<ChatScreen> {
           _lastItemCount = null;
           return _buildEmptyState();
         }
-        final itemCount = state.messages.length +
-            (state.streamingContent != null ? 1 : 0);
+        final displayItems = _buildDisplayItems(state);
+        final itemCount = displayItems.length;
         if (itemCount != _lastItemCount) {
           _lastItemCount = itemCount;
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -212,22 +245,203 @@ class _ChatScreenState extends State<ChatScreen> {
         return ListView.builder(
           controller: _scrollController,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          itemCount: state.messages.length +
-              (state.streamingContent != null ? 1 : 0),
-          itemBuilder: (context, index) {
-            if (state.streamingContent != null &&
-                index == state.messages.length) {
-              if (state.streamingContent!.isEmpty) {
-                return TypingBubble(
-                  color: Theme.of(context).colorScheme.primary,
-                );
-              }
-              return _buildAssistantText(state.streamingContent!);
+          itemCount: itemCount,
+          itemBuilder: (context, displayIndex) {
+            final item = displayItems[displayIndex];
+            switch (item.type) {
+              case _DisplayItemType.message:
+                final msgIndex = item.index;
+                final msg = state.messages[msgIndex];
+                if (msg.role == 'status') {
+                  return _buildStatusMessage(msg);
+                }
+                return _buildMessage(msg, msgIndex);
+              case _DisplayItemType.streamingThinking:
+                return _buildThinkingBubble(state.streamingThinking!,
+                    initiallyExpanded: _thinkingExpanded);
+              case _DisplayItemType.streaming:
+                return _buildStreamingItem(state);
             }
-            return _buildMessage(state.messages[index], index);
           },
         );
       },
+    );
+  }
+
+  Widget _buildSearchingIndicator() {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: cs.primary, width: 3)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 14, top: 4, bottom: 4, right: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: cs.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Searching Hardcover...',
+                style: AppTextStyles.chatBody(context).copyWith(
+                  color: cs.onSurface.withAlpha(140),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStreamingItem(ChatState state) {
+    if (state.streamingContent == 'Searching Hardcover...') {
+      return _buildSearchingIndicator();
+    }
+    if (state.streamingContent!.isEmpty) {
+      return TypingBubble(
+        color: Theme.of(context).colorScheme.primary,
+      );
+    }
+    return _buildAssistantText(state.streamingContent!);
+  }
+
+  Widget _buildThinkingBubble(String content,
+      {required bool initiallyExpanded}) {
+    final cs = Theme.of(context).colorScheme;
+    final isStreaming = initiallyExpanded;
+
+    return StatefulBuilder(
+      builder: (context, setLocalState) {
+        final expanded = isStreaming ? _thinkingExpanded : false;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  setLocalState(() {});
+                  setState(() => _thinkingExpanded = !_thinkingExpanded);
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(
+                          color: cs.tertiary.withAlpha(120), width: 2),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                        left: 12, top: 6, bottom: 6, right: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.psychology_outlined,
+                          size: 14,
+                          color: cs.tertiary.withAlpha(160),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Thinking',
+                          style: AppTextStyles.chatCaption(context).copyWith(
+                            color: cs.tertiary.withAlpha(180),
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          expanded
+                              ? Icons.expand_less
+                              : Icons.expand_more,
+                          size: 14,
+                          color: cs.tertiary.withAlpha(140),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (expanded)
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(
+                          color: cs.tertiary.withAlpha(60), width: 2),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                        left: 12, top: 8, bottom: 8, right: 12),
+                    child: Text(
+                      content,
+                      style: AppTextStyles.chatCaption(context).copyWith(
+                        fontSize: 12,
+                        height: 1.5,
+                        color: cs.onSurface.withAlpha(140),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatusMessage(Message msg) {
+    final cs = Theme.of(context).colorScheme;
+    IconData icon;
+    String text;
+
+    try {
+      final data = jsonDecode(msg.content) as Map<String, dynamic>;
+      final t = data['t'] as String? ?? '';
+      switch (t) {
+        case 'searchDone':
+          icon = Icons.check_circle_outline;
+          text = 'Search done on "${data['q'] ?? ''}"';
+        case 'brainUpdated':
+          icon = Icons.auto_awesome;
+          text = 'Brain updated';
+        case 'hardcoverUpdated':
+          icon = Icons.sync;
+          text = 'Hardcover updated';
+        default:
+          return const SizedBox.shrink();
+      }
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          Icon(icon, size: 12, color: cs.onSurface.withAlpha(100)),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: AppTextStyles.chatCaption(context).copyWith(
+              color: cs.onSurface.withAlpha(100),
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -510,13 +724,19 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (context, state, _) {
         if (state.messages.isEmpty) return const SizedBox.shrink();
 
+        final realCount = state.messages
+            .where((m) => m.role == 'user' || m.role == 'assistant')
+            .length;
         final suffix = state.isSummaryActive ? ' (summarized)' : '';
+        final syncSuffix = state.syncPendingCount > 10
+            ? ' \u00b7 Syncing to Hardcover...'
+            : '';
 
         return Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Text(
-            '${state.messages.length} messages$suffix \u00b7 ${state.formattedSessionTokens}',
+            '$realCount messages$suffix \u00b7 ${state.formattedSessionTokens}$syncSuffix',
             textAlign: TextAlign.center,
             style: AppTextStyles.chatCaption(context).copyWith(
               color: Theme.of(context).colorScheme.onSurface.withAlpha(70),
@@ -608,4 +828,21 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
   }
+}
+
+enum _DisplayItemType { message, streamingThinking, streaming }
+
+class _DisplayItem {
+  final _DisplayItemType type;
+  final int index;
+
+  const _DisplayItem.message(this.index) : type = _DisplayItemType.message;
+
+  const _DisplayItem.streamingThinking()
+      : type = _DisplayItemType.streamingThinking,
+        index = -1;
+
+  const _DisplayItem.streaming()
+      : type = _DisplayItemType.streaming,
+        index = -1;
 }

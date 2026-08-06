@@ -38,18 +38,15 @@ class PatchLogEntry {
 
 class BrainParser {
   static const _blockTypes = {
-    'JSON_APPEND_BOOK': BlockType.appendBook,
-    'JSON_UPDATE_BOOK': BlockType.updateBook,
-    'JSON_DELETE_BOOK': BlockType.deleteBook,
-    'JSON_PATCH': BlockType.patch,
-    'JSON_OBSERVATION': BlockType.observation,
+    'APPEND_BOOK': BlockType.appendBook,
+    'UPDATE_BOOK': BlockType.updateBook,
+    'DELETE_BOOK': BlockType.deleteBook,
+    'PATCH': BlockType.patch,
+    'OBSERVATION': BlockType.observation,
   };
 
-  static final _blockRegex = RegExp(
-    r'BEGIN_(JSON_APPEND_BOOK|JSON_UPDATE_BOOK|JSON_DELETE_BOOK|JSON_PATCH|JSON_OBSERVATION)\n'
-    r'(.*?)'
-    r'\nEND_\1',
-    dotAll: true,
+  static final _beginMarker = RegExp(
+    r'(?:BEGIN_(?:JSON_)?)?(APPEND_BOOK|UPDATE_BOOK|DELETE_BOOK|PATCH|OBSERVATION)(?:\s+\w+)?',
   );
 
   static ParsedResponse parse(String rawResponse) {
@@ -57,31 +54,72 @@ class BrainParser {
     final proseParts = <String>[];
     int lastEnd = 0;
 
-    for (final match in _blockRegex.allMatches(rawResponse)) {
-      final typeStr = match.group(1)!;
-      final body = match.group(2)!.trim();
-      final type = _blockTypes[typeStr]!;
+    final lines = rawResponse.split('\n');
+    var i = 0;
+    while (i < lines.length) {
+      final beginMatch = _beginMarker.firstMatch(lines[i]);
+      if (beginMatch == null) {
+        i++;
+        continue;
+      }
 
+      final blockTypeStr = beginMatch.group(1)!;
+      final blockType = _blockTypes[blockTypeStr];
+      if (blockType == null) {
+        i++;
+        continue;
+      }
+
+      final endMarker = RegExp(
+        r'END_(?:JSON_)?' + RegExp.escape(blockTypeStr) + r'\s*$',
+      );
+
+      final jsonLines = <String>[];
+      var j = i + 1;
+      var endFound = false;
+      while (j < lines.length) {
+        if (endMarker.hasMatch(lines[j])) {
+          endFound = true;
+          break;
+        }
+        jsonLines.add(lines[j]);
+        j++;
+      }
+
+      if (!endFound) {
+        i++;
+        continue;
+      }
+
+      final body = jsonLines.join('\n').trim();
       Map<String, dynamic> jsonData;
       try {
         jsonData = jsonDecode(body) as Map<String, dynamic>;
       } catch (_) {
-        jsonData = <String, dynamic>{};
+        i = j + 1;
+        continue;
       }
 
+      final blockStartLine = i;
+      final blockEndLine = j;
+      final rawText = lines.sublist(blockStartLine, blockEndLine + 1).join('\n');
+
       blocks.add(OperationBlock(
-          type: type, rawText: match.group(0)!, jsonData: jsonData));
+          type: blockType, rawText: rawText, jsonData: jsonData));
 
-      final before = rawResponse.substring(lastEnd, match.start);
-      proseParts.add(before);
-      lastEnd = match.end;
+      final beforeLines = lastEnd < blockStartLine
+          ? lines.sublist(lastEnd, blockStartLine).join('\n')
+          : '';
+      if (beforeLines.isNotEmpty) proseParts.add(beforeLines);
+      lastEnd = blockEndLine + 1;
+      i = j + 1;
     }
 
-    if (lastEnd < rawResponse.length) {
-      proseParts.add(rawResponse.substring(lastEnd));
+    if (lastEnd < lines.length) {
+      proseParts.add(lines.sublist(lastEnd).join('\n'));
     }
 
-    String prose = proseParts.join();
+    String prose = proseParts.join('\n');
     prose = prose.replaceAll(RegExp(r'\n{3,}'), '\n\n');
     prose = prose.trim();
 
@@ -116,11 +154,15 @@ class BrainParser {
                 block.jsonData['targetTitle'] as String? ?? '';
             final bookJson = block.jsonData['book'] as Map<String, dynamic>?;
             if (targetTitle.isEmpty || bookJson == null) break;
-            final book = Book.fromJson(bookJson);
             final idx = brain.books
                 .indexWhere((b) => b.title == targetTitle);
             if (idx != -1) {
-              brain.books[idx] = book;
+              final existing = brain.books[idx];
+              final merged = Book.fromJson({
+                ...existing.toJson(),
+                ...bookJson,
+              });
+              brain.books[idx] = merged;
               log.add(PatchLogEntry(
                   operation: 'UPDATE_BOOK', target: targetTitle));
             }
@@ -141,12 +183,19 @@ class BrainParser {
         case BlockType.patch:
           try {
             final targetSection =
-                block.jsonData['targetSection'] as String? ?? '';
-            final replacementContent = block.jsonData['replacementContent'];
+                (block.jsonData['targetSection'] ??
+                        block.jsonData['target']) as String? ??
+                    '';
+            final replacementContent = block.jsonData['replacementContent'] ??
+                block.jsonData['replace'];
             final reason = block.jsonData['reason'] as String?;
             final confidence =
                 (block.jsonData['confidence'] as num?)?.toDouble();
-            if (targetSection.isEmpty || replacementContent == null) break;
+            if (targetSection.isEmpty) break;
+            if (replacementContent == null &&
+                targetSection != 'CURRENT_READING') {
+              break;
+            }
 
             _applyJsonPatch(brain, targetSection, replacementContent);
             log.add(PatchLogEntry(
@@ -169,15 +218,18 @@ class BrainParser {
             final logged =
                 block.jsonData['logged'] as String? ?? '';
 
-            final matching = brain.observations
-                .where((o) => _similarHypotheses(o.hypothesis, hypothesis))
-                .toList();
+            final matching = <int>[];
+            for (var i = 0; i < brain.observations.length; i++) {
+              if (_similarHypotheses(
+                  brain.observations[i].hypothesis, hypothesis)) {
+                matching.add(i);
+              }
+            }
 
             if (matching.length >= 2) {
-              final evidenceDates =
-                  matching.map((o) => o.logged).toList();
-              brain.observations
-                  .removeWhere((o) => evidenceDates.contains(o.logged));
+              for (final idx in matching.reversed) {
+                brain.observations.removeAt(idx);
+              }
             } else {
               brain.observations.add(ObservationEntry(
                 evidence: evidence,
@@ -205,6 +257,24 @@ class BrainParser {
     );
   }
 
+  static Map<String, dynamic> _deepMerge(
+      Map<String, dynamic> base,
+      Map<String, dynamic> overlay) {
+    final result = Map<String, dynamic>.from(base);
+    for (final entry in overlay.entries) {
+      if (entry.value is Map<String, dynamic> &&
+          result[entry.key] is Map<String, dynamic>) {
+        result[entry.key] = _deepMerge(
+          result[entry.key] as Map<String, dynamic>,
+          entry.value as Map<String, dynamic>,
+        );
+      } else {
+        result[entry.key] = entry.value;
+      }
+    }
+    return result;
+  }
+
   static void _applyJsonPatch(
       Brain brain, String targetSection, dynamic replacementContent) {
     final parts = targetSection.split('.');
@@ -220,7 +290,9 @@ class BrainParser {
 
       case 'READER_PROFILE':
         if (subsection == null && replacementContent is Map<String, dynamic>) {
-          brain.readerProfile = ReaderProfile.fromJson(replacementContent);
+          final merged = _deepMerge(
+              brain.readerProfile.toJson(), replacementContent);
+          brain.readerProfile = ReaderProfile.fromJson(merged);
         } else if (subsection == 'CORE_PHILOSOPHY' &&
             replacementContent is String) {
           brain.readerProfile.corePhilosophy = replacementContent;
@@ -230,21 +302,30 @@ class BrainParser {
               replacementContent.cast<String>();
         } else if (subsection == 'NARRATIVE_PREFERENCES' &&
             replacementContent is Map<String, dynamic>) {
+          final merged = _deepMerge(
+              brain.readerProfile.narrativePreferences.toJson(),
+              replacementContent);
           brain.readerProfile.narrativePreferences =
-              NarrativePreferences.fromJson(replacementContent);
+              NarrativePreferences.fromJson(merged);
         }
         break;
 
       case 'READING_MODES':
         if (replacementContent is Map<String, dynamic>) {
+          final merged = _deepMerge(
+              Map<String, dynamic>.from(brain.readingModes),
+              replacementContent);
           brain.readingModes =
-              replacementContent.map((k, v) => MapEntry(k, v as String));
+              merged.map((k, v) => MapEntry(k, v as String));
         }
         break;
 
       case 'VOCABULARY':
         if (replacementContent is Map<String, dynamic>) {
-          brain.vocabulary = replacementContent.map(
+          final baseVocab = brain.vocabulary
+              .map((k, v) => MapEntry(k, v.toJson()));
+          final merged = _deepMerge(baseVocab, replacementContent);
+          brain.vocabulary = merged.map(
               (k, v) => MapEntry(
                   k,
                   v is Map<String, dynamic>
@@ -255,22 +336,28 @@ class BrainParser {
 
       case 'FAVORITE_AUTHORS':
         if (replacementContent is Map<String, dynamic>) {
+          final merged = _deepMerge(
+              brain.favoriteAuthors.toJson(), replacementContent);
           brain.favoriteAuthors =
-              FavoriteAuthors.fromJson(replacementContent);
+              FavoriteAuthors.fromJson(merged);
         }
         break;
 
       case 'FAVORITE_BOOKS':
         if (replacementContent is Map<String, dynamic>) {
+          final merged = _deepMerge(
+              brain.favoriteBooks.toJson(), replacementContent);
           brain.favoriteBooks =
-              FavoriteBooks.fromJson(replacementContent);
+              FavoriteBooks.fromJson(merged);
         }
         break;
 
       case 'READER_BLIND_SPOTS':
         if (replacementContent is Map<String, dynamic>) {
+          final merged = _deepMerge(
+              brain.readerBlindSpots.toJson(), replacementContent);
           brain.readerBlindSpots =
-              ReaderBlindSpots.fromJson(replacementContent);
+              ReaderBlindSpots.fromJson(merged);
         }
         break;
 
@@ -294,15 +381,19 @@ class BrainParser {
             (replacementContent is Map && replacementContent.isEmpty)) {
           brain.currentReading = null;
         } else if (replacementContent is Map<String, dynamic>) {
+          final merged = _deepMerge(
+              brain.currentReading?.toJson() ?? {}, replacementContent);
           brain.currentReading =
-              CurrentReading.fromJson(replacementContent);
+              CurrentReading.fromJson(merged);
         }
         break;
 
       case 'RECOMMENDATION_QUEUE':
         if (replacementContent is Map<String, dynamic>) {
+          final merged = _deepMerge(
+              brain.recommendationQueue.toJson(), replacementContent);
           brain.recommendationQueue =
-              RecommendationQueue.fromJson(replacementContent);
+              RecommendationQueue.fromJson(merged);
         }
         break;
 

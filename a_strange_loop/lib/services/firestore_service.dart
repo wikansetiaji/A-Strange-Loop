@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:a_strange_loop/models/session.dart';
 import 'package:a_strange_loop/models/message.dart';
 import 'package:a_strange_loop/models/brain.dart';
+import 'package:a_strange_loop/models/model_settings.dart';
 import 'package:a_strange_loop/services/brain_parser.dart';
 
 class FirestoreService {
@@ -174,6 +175,21 @@ class FirestoreService {
       'pinned': pinned,
       'updated_at': FieldValue.serverTimestamp(),
     });
+  }
+
+  // ── Model Settings ───────────────────────────────────────────
+
+  Future<ModelSettings> getModelSettings() async {
+    final doc = await _firestore.collection('meta').doc('model_settings').get();
+    if (!doc.exists) return const ModelSettings();
+    return ModelSettings.fromJson(doc.data()!);
+  }
+
+  Future<void> saveModelSettings(ModelSettings settings) async {
+    await _firestore.collection('meta').doc('model_settings').set(
+          settings.toJson(),
+          SetOptions(merge: true),
+        );
   }
 
   // ── Legacy (kept for compatibility) ───────────────────────────

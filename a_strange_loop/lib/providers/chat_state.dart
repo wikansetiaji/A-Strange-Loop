@@ -8,18 +8,24 @@ import 'package:a_strange_loop/models/brain.dart';
 import 'package:a_strange_loop/services/firestore_service.dart';
 import 'package:a_strange_loop/services/ai_service.dart';
 import 'package:a_strange_loop/services/brain_parser.dart';
+import 'package:a_strange_loop/services/hardcover_service.dart';
+import 'package:a_strange_loop/services/sync_service.dart';
 import 'package:a_strange_loop/constants/system_prompt.dart';
 import 'package:a_strange_loop/constants/api_config.dart';
+import 'package:a_strange_loop/models/model_settings.dart';
 
 class ChatState extends ChangeNotifier {
   final FirestoreService _firestore = FirestoreService();
   final AIService _ai = AIService();
+  late final HardcoverService _hardcover;
+  late final SyncService _sync;
 
   String? currentSessionId;
   List<Session> sessions = [];
 
   List<Message> messages = [];
   String? streamingContent;
+  String? streamingThinking;
   bool isLoading = false;
   String? error;
 
@@ -39,12 +45,40 @@ class ChatState extends ChangeNotifier {
   DateTime? _brainFetchedAt;
   DateTime _lastNotify = DateTime.now();
 
+  ModelSettings _modelSettings = const ModelSettings();
+  ModelSettings get modelSettings => _modelSettings;
+
   String? get brainContent => _brainCache;
 
-  Future<String> loadBrain() async => _getBrain();
+  Future<String> loadBrain({bool forceRefresh = false}) =>
+      _getBrain(forceRefresh: forceRefresh);
 
   Timer? _searchDebounce;
   bool isSearching = false;
+
+  void initServices({
+    required HardcoverService hardcoverService,
+    required SyncService syncService,
+  }) {
+    _hardcover = hardcoverService;
+    _sync = syncService;
+  }
+
+  int get syncPendingCount => _sync.pendingCount;
+
+  Future<void> reconcileHardcover() => _sync.startupReconcile();
+
+  Future<void> loadModelSettings() async {
+    _modelSettings = await _firestore.getModelSettings();
+    _ai.updateSettings(_modelSettings.model, _modelSettings.thinkingEffort);
+  }
+
+  Future<void> updateModelSettings(ModelSettings settings) async {
+    _modelSettings = settings;
+    _ai.updateSettings(settings.model, settings.thinkingEffort);
+    await _firestore.saveModelSettings(settings);
+    notifyListeners();
+  }
 
   Future<void> seedBrainIfNeeded() async {
     try {
@@ -60,6 +94,7 @@ class ChatState extends ChangeNotifier {
   Future<void> initializeSessions() async {
     final loaded = await _firestore.loadSessions();
     sessions = loaded;
+    await loadModelSettings();
     if (sessions.isNotEmpty) {
       await switchSession(sessions.first.id);
     } else {
@@ -179,6 +214,7 @@ class ChatState extends ChangeNotifier {
     );
     messages.add(userMsg);
     streamingContent = '';
+    streamingThinking = null;
     error = null;
     isLoading = true;
     notifyListeners();
@@ -219,6 +255,7 @@ class ChatState extends ChangeNotifier {
     }
 
     streamingContent = '';
+    streamingThinking = null;
     error = null;
     isLoading = true;
     notifyListeners();
@@ -265,9 +302,12 @@ class ChatState extends ChangeNotifier {
     }
     _sortSessions();
 
-    final lastMsg = messages.last;
-    if (lastMsg.role == 'user') {
+    final lastRealMsg = messages
+        .lastWhere((m) => m.role == 'user' || m.role == 'assistant',
+            orElse: () => messages.last);
+    if (lastRealMsg.role == 'user') {
       streamingContent = '';
+      streamingThinking = null;
       error = null;
       isLoading = true;
       notifyListeners();
@@ -287,112 +327,236 @@ class ChatState extends ChangeNotifier {
 
   Future<void> _generateResponse() async {
     final brain = await _getBrain();
-
     final compressed = await _maybeCompress(brain);
-    final prompt = _buildPrompt(brain, compressed);
 
-    final buffer = StringBuffer();
-    bool blocksDetected = false;
-    final blockBuffer = StringBuffer();
-    String visibleBuffer = '';
+    int toolCallRounds = 0;
+    List<Map<String, dynamic>> apiMessages = _buildApiMessages(
+        brain, compressed);
+    final tools = [_hardcover.searchBooksTool];
 
-    await for (final chunk in _ai.sendMessageStream(prompt)) {
-      if (chunk.startsWith('[USAGE:')) {
-        final parts = chunk
-            .substring(7, chunk.length - 1)
-            .split(':');
-        sessionPromptTokens += int.parse(parts[0]);
-        sessionCompletionTokens += int.parse(parts[1]);
+    fullResponse:
+    while (toolCallRounds <= maxToolCallRounds) {
+      final buffer = StringBuffer();
+      bool blocksDetected = false;
+      final blockBuffer = StringBuffer();
+      String visibleBuffer = '';
+      final toolRequests = <ToolCallRequest>[];
+
+      await for (final event in _ai.sendMessageStreamWithTools(
+        apiMessages,
+        tools: tools,
+      )) {
+        if (event is ToolCallRequest) {
+          toolRequests.add(event);
+        } else if (event is TextChunk) {
+          if (event.promptTokens != null) {
+            sessionPromptTokens += event.promptTokens!;
+            sessionCompletionTokens += event.completionTokens ?? 0;
+          } else if (event.reasoningContent != null) {
+            streamingThinking =
+                (streamingThinking ?? '') + event.reasoningContent!;
+            _throttledNotify();
+          } else if (event.content.isNotEmpty) {
+            final chunk = event.content;
+            buffer.write(chunk);
+
+            if (blocksDetected) {
+              blockBuffer.write(chunk);
+              continue;
+            }
+
+            final combined = visibleBuffer + chunk;
+            final markerIdx = _findBlockMarker(combined);
+            if (markerIdx != -1) {
+              visibleBuffer = combined.substring(0, markerIdx);
+              final remaining = combined.substring(markerIdx);
+              blockBuffer.write(remaining);
+              blocksDetected = true;
+            } else {
+              visibleBuffer = combined;
+            }
+
+            streamingContent = visibleBuffer;
+            _throttledNotify();
+          }
+        }
+      }
+
+      if (toolRequests.isNotEmpty && toolCallRounds < maxToolCallRounds) {
+        final fullContent = buffer.toString();
+        final isBlockResponse =
+            blocksDetected && _containsBlockMarker(fullContent);
+        final parsed =
+            isBlockResponse ? BrainParser.parse(fullContent) : null;
+        final prose = parsed?.prose ?? fullContent;
+
+        if (prose.isNotEmpty) {
+          final intermediateMsg = Message(
+            role: 'assistant',
+            content: prose,
+            order: messages.length,
+          );
+          messages.add(intermediateMsg);
+          await _firestore.saveMessage(currentSessionId!, intermediateMsg);
+        }
+
+        streamingThinking = null;
+        streamingContent = 'Searching Hardcover...';
+        notifyListeners();
+
+        final assistantMsg = <String, dynamic>{
+          'role': 'assistant',
+          'content': prose.isNotEmpty ? prose : null,
+          'tool_calls': toolRequests.map((tc) => {
+            'id': tc.id,
+            'type': 'function',
+            'function': {
+              'name': tc.name,
+              'arguments': jsonEncode(tc.arguments),
+            },
+          }).toList(),
+        };
+        apiMessages.add(assistantMsg);
+
+        for (final tc in toolRequests) {
+          if (tc.name == 'searchBooks') {
+            final query = tc.arguments['query'] as String? ?? '';
+            try {
+              final results = await _hardcover.searchBooks(query);
+              final minimalResults = results
+                  .take(3)
+                  .map((r) => {
+                        'id': r.id,
+                        'title': r.title,
+                        'author': r.author ?? '',
+                        if (r.rating != null) 'rating': r.rating,
+                      })
+                  .toList();
+              apiMessages.add({
+                'role': 'tool',
+                'tool_call_id': tc.id,
+                'content': jsonEncode(minimalResults),
+              });
+              final searchDoneMsg = Message(
+                role: 'status',
+                content: '{"t":"searchDone","q":${jsonEncode(query)}}',
+                order: messages.length,
+              );
+              messages.add(searchDoneMsg);
+              _firestore.saveMessage(currentSessionId!, searchDoneMsg);
+            } catch (e) {
+              apiMessages.add({
+                'role': 'tool',
+                'tool_call_id': tc.id,
+                'content': jsonEncode({'error': e.toString()}),
+              });
+            }
+          } else {
+            apiMessages.add({
+              'role': 'tool',
+              'tool_call_id': tc.id,
+              'content': jsonEncode({'error': 'Unknown tool: ${tc.name}'}),
+            });
+          }
+        }
+
+        toolCallRounds++;
+        continue fullResponse;
+      }
+
+      final fullContent = buffer.toString();
+      final isBlockResponse =
+          blocksDetected && _containsBlockMarker(fullContent);
+      final parsed =
+          isBlockResponse ? BrainParser.parse(fullContent) : null;
+      final rawProse = parsed?.prose ?? fullContent;
+      final prose = rawProse.trim().isEmpty
+          ? "I got lost in thought and ran out of space. Could you rephrase or try again?"
+          : rawProse;
+
+      final assistantMsg = Message(
+        role: 'assistant',
+        content: prose,
+        order: messages.length,
+      );
+      messages.add(assistantMsg);
+      streamingContent = null;
+      streamingThinking = null;
+      isLoading = false;
+
+      await _firestore.saveMessage(currentSessionId!, assistantMsg);
+
+      final meta = _currentSessionMeta();
+      await _firestore.updateSessionMeta(currentSessionId!, meta.toMap());
+
+      final idx = sessions.indexWhere((s) => s.id == currentSessionId);
+      if (idx != -1) {
+        sessions[idx] = meta;
       } else {
-        buffer.write(chunk);
-
-        if (blocksDetected) {
-          blockBuffer.write(chunk);
-          continue;
-        }
-
-        final combined = visibleBuffer + chunk;
-        final markerIdx = _findBlockMarker(combined);
-        if (markerIdx != -1) {
-          visibleBuffer = combined.substring(0, markerIdx);
-          final remaining = combined.substring(markerIdx);
-          blockBuffer.write(remaining);
-          blocksDetected = true;
-        } else {
-          visibleBuffer = combined;
-        }
-
-        streamingContent = visibleBuffer;
-        _throttledNotify();
+        sessions.insert(0, meta);
       }
-    }
+      _sortSessions();
 
-    final fullContent = buffer.toString();
-    final isBlockResponse =
-        blocksDetected && _containsBlockMarker(fullContent);
-    final parsed =
-        isBlockResponse ? BrainParser.parse(fullContent) : null;
-    final prose = parsed?.prose ?? fullContent;
-
-    final assistantMsg = Message(
-      role: 'assistant',
-      content: prose,
-      order: messages.length,
-    );
-    messages.add(assistantMsg);
-    streamingContent = null;
-    isLoading = false;
-
-    await _firestore.saveMessage(currentSessionId!, assistantMsg);
-
-    final meta = _currentSessionMeta();
-    await _firestore.updateSessionMeta(currentSessionId!, meta.toMap());
-
-    final idx = sessions.indexWhere((s) => s.id == currentSessionId);
-    if (idx != -1) {
-      sessions[idx] = meta;
-    } else {
-      sessions.insert(0, meta);
-    }
-    _sortSessions();
-
-    final wasFirstExchange = messages.length == 2 && meta.title == null;
-    if (wasFirstExchange) {
-      _generateTitle(messages[0].content, messages[1].content);
-    }
-
-    if (parsed != null && parsed.blocks.isNotEmpty) {
-      try {
-        final freshBrain = await _firestore.getBrain();
-        final update =
-            BrainParser.applyBlocks(freshBrain, parsed.blocks);
-        await _firestore.updateBrain(update.brain, update.log);
-        _brainCache = update.brain;
-        _brainFetchedAt = DateTime.now();
-        _parseCurrentReading(update.brain);
-      } catch (e) {
-        debugPrint('BrainParser error: $e');
+      final realMsgs = messages
+          .where((m) => m.role == 'user' || m.role == 'assistant')
+          .toList();
+      final wasFirstExchange =
+          realMsgs.length == 2 && meta.title == null;
+      if (wasFirstExchange) {
+        _generateTitle(realMsgs[0].content, realMsgs[1].content);
       }
+
+      if (parsed != null && parsed.blocks.isNotEmpty) {
+        try {
+          final previousBrain = await _getBrain();
+          final freshBrain = await _firestore.getBrain();
+          final update =
+              BrainParser.applyBlocks(freshBrain, parsed.blocks);
+          await _firestore.updateBrain(update.brain, update.log);
+          _brainCache = update.brain;
+          _brainFetchedAt = DateTime.now();
+          _parseCurrentReading(update.brain);
+          _sync.enqueueFromBrainMutation(
+              parsed.blocks, previousBrain);
+          _sync.drainSyncQueue();
+          final brainMsg = Message(
+            role: 'status',
+            content: '{"t":"brainUpdated"}',
+            order: messages.length,
+          );
+          messages.add(brainMsg);
+          _firestore.saveMessage(currentSessionId!, brainMsg);
+          final hardcoverMsg = Message(
+            role: 'status',
+            content: '{"t":"hardcoverUpdated"}',
+            order: messages.length,
+          );
+          messages.add(hardcoverMsg);
+          _firestore.saveMessage(currentSessionId!, hardcoverMsg);
+        } catch (e) {
+          debugPrint('BrainParser error: $e');
+        }
+      }
+
+      notifyListeners();
+      break;
     }
 
-    notifyListeners();
+    if (toolCallRounds > maxToolCallRounds &&
+        streamingContent == 'Searching Hardcover...') {
+      streamingContent = null;
+      isLoading = false;
+      error = 'Tool call limit reached. Please try again.';
+      notifyListeners();
+    }
   }
 
   static int _findBlockMarker(String text) {
-    const markers = [
-      'BEGIN_JSON_APPEND_BOOK',
-      'BEGIN_JSON_UPDATE_BOOK',
-      'BEGIN_JSON_DELETE_BOOK',
-      'BEGIN_JSON_PATCH',
-      'BEGIN_JSON_OBSERVATION',
-    ];
-    for (final marker in markers) {
-      final idx = text.length >= marker.length
-          ? text.indexOf(marker)
-          : -1;
-      if (idx >= 0) return idx;
-    }
-    return -1;
+    final regex = RegExp(
+      r'(?:^|\n)(?:BEGIN_(?:JSON_)?)?(?:APPEND_BOOK|UPDATE_BOOK|DELETE_BOOK|PATCH(?:\s+\w+)?|OBSERVATION)',
+    );
+    final match = regex.firstMatch(text);
+    return match?.start ?? -1;
   }
 
   static bool _containsBlockMarker(String text) =>
@@ -427,7 +591,10 @@ class ChatState extends ChangeNotifier {
   // ── Compression ───────────────────────────────────────────────
 
   Future<List<Message>> _maybeCompress(String brain) async {
-    final fullPrompt = _buildPrompt(brain, messages);
+    final fullMessages = _buildApiMessages(brain, messages);
+    final fullPrompt = fullMessages
+        .map((m) => m['content']?.toString() ?? '')
+        .join();
     final totalTokens = fullPrompt.length ~/ 4;
 
     if (totalTokens <= maxInputTokens) {
@@ -477,8 +644,8 @@ class ChatState extends ChangeNotifier {
 
   // ── Brain ─────────────────────────────────────────────────────
 
-  Future<String> _getBrain() async {
-    if (_brainCache != null && _brainFetchedAt != null) {
+  Future<String> _getBrain({bool forceRefresh = false}) async {
+    if (!forceRefresh && _brainCache != null && _brainFetchedAt != null) {
       return _brainCache!;
     }
     final brain = await _firestore.getBrain();
@@ -506,22 +673,40 @@ class ChatState extends ChangeNotifier {
     }
   }
 
-  String _buildPrompt(String brain, List<Message> msgs) {
-    final historyParts = <String>[];
+  String _buildBrainContext(String brainJson) {
+    try {
+      final brain = Brain.fromJson(
+          jsonDecode(brainJson) as Map<String, dynamic>);
+      return brain.toMarkdownForContext(maxBooks: maxBrainBooks);
+    } catch (_) {
+      return brainJson;
+    }
+  }
+
+  List<Map<String, dynamic>> _buildApiMessages(
+      String brain, List<Message> msgs) {
+    final brainContext = _buildBrainContext(brain);
+    final result = <Map<String, dynamic>>[
+      {'role': 'system', 'content': companionSystemPrompt},
+      {'role': 'system', 'content': brainContext},
+    ];
 
     for (final m in msgs) {
+      if (m.role == 'status') continue;
       if (m.role == 'system') {
-        historyParts.add('## Conversation Summary\n\n${m.content}');
+        result.add({
+          'role': 'system',
+          'content': '## Conversation Summary\n\n${m.content}',
+        });
       } else {
-        historyParts.add(
-            '${m.role == 'user' ? 'User' : 'Assistant'}: ${m.content}');
+        result.add({
+          'role': m.role,
+          'content': m.content,
+        });
       }
     }
 
-    final history = historyParts.join('\n\n');
-
-    return '$companionSystemPrompt\n\n---\n\n$brain\n\n---\n\n'
-        '## Chat History\n\n$history';
+    return result;
   }
 
   // ── Helpers ───────────────────────────────────────────────────
@@ -544,7 +729,9 @@ class ChatState extends ChangeNotifier {
   }
 
   Session _currentSessionMeta() {
-    final lastMsg = messages.isNotEmpty ? messages.last : null;
+    final realMessages =
+        messages.where((m) => m.role == 'user' || m.role == 'assistant').toList();
+    final lastMsg = realMessages.isNotEmpty ? realMessages.last : null;
     return Session(
       id: currentSessionId!,
       title: sessions
@@ -569,7 +756,7 @@ class ChatState extends ChangeNotifier {
       updatedAt: DateTime.now(),
       promptTokens: sessionPromptTokens,
       completionTokens: sessionCompletionTokens,
-      messageCount: messages.length,
+      messageCount: realMessages.length,
       conversationSummary: _conversationSummary,
       lastSummarizedIndex: _lastSummarizedIndex,
     );

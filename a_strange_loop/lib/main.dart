@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
@@ -8,6 +10,9 @@ import 'package:a_strange_loop/screens/chat_screen.dart';
 import 'package:a_strange_loop/screens/login_screen.dart';
 import 'package:a_strange_loop/theme/app_theme.dart';
 import 'package:a_strange_loop/widgets/animations.dart';
+import 'package:a_strange_loop/services/hardcover_service.dart';
+import 'package:a_strange_loop/services/sync_service.dart';
+import 'package:a_strange_loop/services/firestore_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,6 +32,20 @@ void main() async {
     print('Seed skipped (brain may already exist): $e');
   }
 
+  final hardcoverService = HardcoverService();
+  final syncService = SyncService(
+    firestore: FirestoreService(),
+    hardcover: hardcoverService,
+  );
+  chatState.initServices(
+    hardcoverService: hardcoverService,
+    syncService: syncService,
+  );
+
+  unawaited(syncService.startupReconcile().whenComplete(() {
+    syncService.startPeriodicSync();
+  }));
+
   runApp(ASLApp(chatState: chatState));
 }
 
@@ -45,25 +64,28 @@ class ASLApp extends StatelessWidget {
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
         themeMode: ThemeMode.system,
-        home: StreamBuilder<User?>(
-          stream: FirebaseAuth.instance.authStateChanges(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Scaffold(
-                backgroundColor: Theme.of(context).colorScheme.surface,
-                body: Center(
-                  child: BlockLoader(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              );
-            }
-            if (snapshot.hasData) {
-              return const ChatScreen();
-            }
-            return const LoginScreen();
-          },
-        ),
+        home: kDebugMode
+            ? const ChatScreen()
+            : StreamBuilder<User?>(
+                stream: FirebaseAuth.instance.authStateChanges(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Scaffold(
+                      backgroundColor:
+                          Theme.of(context).colorScheme.surface,
+                      body: Center(
+                        child: BlockLoader(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    );
+                  }
+                  if (snapshot.hasData) {
+                    return const ChatScreen();
+                  }
+                  return const LoginScreen();
+                },
+              ),
       ),
     );
   }

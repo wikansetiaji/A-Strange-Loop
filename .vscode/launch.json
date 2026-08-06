@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Chrome (debug)",
+            "type": "dart",
+            "request": "launch",
+            "program": "a_strange_loop/lib/main.dart",
+            "deviceId": "chrome",
+            "args": [
+                "--web-port",
+                "8080"
+            ]
+        }
+    ]
+}

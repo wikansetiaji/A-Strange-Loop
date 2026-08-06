@@ -101,6 +101,40 @@ class Brain {
     };
   }
 
+  static int _statusPriority(String status) {
+    final s = status.trim().toLowerCase();
+    if (s == 'reading') return 0;
+    if (s == 'want to read') return 1;
+    return 2;
+  }
+
+  void sortBooksByRecent() {
+    books.sort((a, b) {
+      final aPrio = _statusPriority(a.status);
+      final bPrio = _statusPriority(b.status);
+      if (aPrio != bPrio) return aPrio.compareTo(bPrio);
+
+      final aDate = a.dateRead ?? a.dateAdded ?? '';
+      final bDate = b.dateRead ?? b.dateAdded ?? '';
+      if (aDate.isNotEmpty && bDate.isNotEmpty) {
+        return bDate.compareTo(aDate);
+      }
+      if (aDate.isNotEmpty) return -1;
+      if (bDate.isNotEmpty) return 1;
+      return a.title.compareTo(b.title);
+    });
+  }
+
+  String toMarkdownForContext({int maxBooks = 10}) {
+    sortBooksByRecent();
+    final trimmed = List<Book>.from(books).take(maxBooks).toList();
+    final original = books;
+    books = trimmed;
+    final md = toMarkdown();
+    books = original;
+    return md;
+  }
+
   String toMarkdown() {
     final buf = StringBuffer();
     buf.writeln('# READING_BRAIN');
@@ -268,6 +302,12 @@ class Brain {
         buf.writeln(currentReading!.notes);
         buf.writeln();
       }
+      if (currentReading!.hardcoverId != null) {
+        buf.writeln('Hardcover ID:');
+        buf.writeln();
+        buf.writeln(currentReading!.hardcoverId);
+        buf.writeln();
+      }
     } else {
       buf.writeln('(empty)');
       buf.writeln();
@@ -360,6 +400,74 @@ class Brain {
         buf.writeln('Abandonment Reason:');
         buf.writeln();
         buf.writeln(book.abandonmentReason);
+        buf.writeln();
+      }
+      if (book.hardcoverId != null) {
+        buf.writeln('Hardcover ID:');
+        buf.writeln();
+        buf.writeln(book.hardcoverId);
+        buf.writeln();
+      }
+      if (book.author != null) {
+        buf.writeln('Author:');
+        buf.writeln();
+        buf.writeln(book.author);
+        buf.writeln();
+      }
+      if (book.coverUrl != null) {
+        buf.writeln('Cover:');
+        buf.writeln();
+        buf.writeln(book.coverUrl);
+        buf.writeln();
+      }
+      if (book.genres.isNotEmpty) {
+        buf.writeln('Genres:');
+        buf.writeln();
+        for (final genre in book.genres) {
+          buf.writeln('- $genre');
+        }
+        buf.writeln();
+      }
+      if (book.pages != null) {
+        buf.writeln('Pages:');
+        buf.writeln();
+        buf.writeln('${book.pages}');
+        buf.writeln();
+      }
+      if (book.hardcoverUrl != null) {
+        buf.writeln('Hardcover URL:');
+        buf.writeln();
+        buf.writeln(book.hardcoverUrl);
+        buf.writeln();
+      }
+      if (book.dateAdded != null) {
+        buf.writeln('Date Added:');
+        buf.writeln();
+        buf.writeln(book.dateAdded);
+        buf.writeln();
+      }
+      if (book.dateRead != null) {
+        buf.writeln('Date Read:');
+        buf.writeln();
+        buf.writeln(book.dateRead);
+        buf.writeln();
+      }
+      if (book.hardcoverStatus != null) {
+        buf.writeln('Hardcover Status:');
+        buf.writeln();
+        buf.writeln(book.hardcoverStatus);
+        buf.writeln();
+      }
+      if (book.hardcoverReview != null) {
+        buf.writeln('Hardcover Review:');
+        buf.writeln();
+        buf.writeln(book.hardcoverReview);
+        buf.writeln();
+      }
+      if (book.hardcoverSpoiler) {
+        buf.writeln('Hardcover Spoiler:');
+        buf.writeln();
+        buf.writeln('true');
         buf.writeln();
       }
     }
@@ -641,17 +749,25 @@ class EvolutionEntry {
       };
 }
 
+String _coerceString(dynamic value) {
+  if (value == null) return '';
+  if (value is String) return value;
+  return value.toString();
+}
+
 class CurrentReading {
   String book;
   String progress;
   String readingStrategy;
   String notes;
+  String? hardcoverId;
 
   CurrentReading({
     this.book = '',
     this.progress = '',
     this.readingStrategy = '',
     this.notes = '',
+    this.hardcoverId,
   });
 
   bool get isNotEmpty =>
@@ -662,19 +778,24 @@ class CurrentReading {
 
   factory CurrentReading.fromJson(Map<String, dynamic> json) {
     return CurrentReading(
-      book: json['book'] as String? ?? '',
-      progress: json['progress'] as String? ?? '',
-      readingStrategy: json['readingStrategy'] as String? ?? '',
-      notes: json['notes'] as String? ?? '',
+      book: _coerceString(json['book']),
+      progress: _coerceString(json['progress']),
+      readingStrategy: _coerceString(json['readingStrategy']),
+      notes: _coerceString(json['notes']),
+      hardcoverId: json['hardcoverId'] as String?,
     );
   }
 
-  Map<String, dynamic> toJson() => {
-        'book': book,
-        'progress': progress,
-        'readingStrategy': readingStrategy,
-        'notes': notes,
-      };
+  Map<String, dynamic> toJson() {
+    final map = <String, dynamic>{
+      'book': book,
+      'progress': progress,
+      'readingStrategy': readingStrategy,
+      'notes': notes,
+    };
+    if (hardcoverId != null) map['hardcoverId'] = hardcoverId;
+    return map;
+  }
 }
 
 class RecommendationQueue {
@@ -725,7 +846,7 @@ class QueueEntry {
 
   factory QueueEntry.fromJson(Map<String, dynamic> json) {
     return QueueEntry(
-      book: json['book'] as String,
+      book: (json['book'] ?? json['title'] ?? '') as String,
       reason: json['reason'] as String,
     );
   }
@@ -770,6 +891,7 @@ class Book {
   String title;
   String status;
   double? rating;
+  double? hardcoverRating;
   String? personalSignificance;
   String? whyItMatters;
   String? progress;
@@ -777,30 +899,77 @@ class Book {
   String? readingStrategy;
   String? abandonmentReason;
 
+  String? hardcoverId;
+  String? author;
+  String? coverUrl;
+  List<String> genres;
+  int? pages;
+  String? hardcoverUrl;
+  String? dateAdded;
+  String? dateRead;
+  String? hardcoverStatus;
+  String? hardcoverReview;
+  bool hardcoverSpoiler;
+
   Book({
     required this.title,
     required this.status,
     this.rating,
+    this.hardcoverRating,
     this.personalSignificance,
     this.whyItMatters,
     this.progress,
     this.currentImpression,
     this.readingStrategy,
     this.abandonmentReason,
+    this.hardcoverId,
+    this.author,
+    this.coverUrl,
+    this.genres = const [],
+    this.pages,
+    this.hardcoverUrl,
+    this.dateAdded,
+    this.dateRead,
+    this.hardcoverStatus,
+    this.hardcoverReview,
+    this.hardcoverSpoiler = false,
   });
 
   factory Book.fromJson(Map<String, dynamic> json) {
     return Book(
       title: json['title'] as String,
       status: json['status'] as String,
-      rating: (json['rating'] as num?)?.toDouble(),
+      rating: _resolveRating(json),
+      hardcoverRating: (json['hardcoverRating'] as num?)?.toDouble(),
       personalSignificance: json['personalSignificance'] as String?,
       whyItMatters: json['whyItMatters'] as String?,
       progress: json['progress'] as String?,
       currentImpression: json['currentImpression'] as String?,
       readingStrategy: json['readingStrategy'] as String?,
       abandonmentReason: json['abandonmentReason'] as String?,
+      hardcoverId: json['hardcoverId'] as String?,
+      author: json['author'] as String?,
+      coverUrl: json['coverUrl'] as String?,
+      genres: (json['genres'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
+      pages: json['pages'] as int?,
+      hardcoverUrl: json['hardcoverUrl'] as String?,
+      dateAdded: json['dateAdded'] as String?,
+      dateRead: json['dateRead'] as String?,
+      hardcoverStatus: json['hardcoverStatus'] as String?,
+      hardcoverReview: json['hardcoverReview'] as String?,
+      hardcoverSpoiler: json['hardcoverSpoiler'] as bool? ?? false,
     );
+  }
+
+  static double? _resolveRating(Map<String, dynamic> json) {
+    final r = (json['rating'] as num?)?.toDouble();
+    final hr = (json['hardcoverRating'] as num?)?.toDouble();
+    if (hr != null && r != hr) return hr;
+    if (r != null) return r;
+    return hr;
   }
 
   Map<String, dynamic> toJson() {
@@ -808,18 +977,13 @@ class Book {
       'title': title,
       'status': status,
     };
-    if (rating != null) {
-      map['rating'] = rating;
-    }
+    if (rating != null) map['rating'] = rating;
+    if (hardcoverRating != null) map['hardcoverRating'] = hardcoverRating;
     if (personalSignificance != null) {
       map['personalSignificance'] = personalSignificance;
     }
-    if (whyItMatters != null) {
-      map['whyItMatters'] = whyItMatters;
-    }
-    if (progress != null) {
-      map['progress'] = progress;
-    }
+    if (whyItMatters != null) map['whyItMatters'] = whyItMatters;
+    if (progress != null) map['progress'] = progress;
     if (currentImpression != null) {
       map['currentImpression'] = currentImpression;
     }
@@ -829,6 +993,25 @@ class Book {
     if (abandonmentReason != null) {
       map['abandonmentReason'] = abandonmentReason;
     }
+    if (hardcoverId != null) map['hardcoverId'] = hardcoverId;
+    if (author != null) map['author'] = author;
+    if (coverUrl != null) map['coverUrl'] = coverUrl;
+    if (genres.isNotEmpty) map['genres'] = genres;
+    if (pages != null) map['pages'] = pages;
+    if (hardcoverUrl != null) map['hardcoverUrl'] = hardcoverUrl;
+    if (dateAdded != null) map['dateAdded'] = dateAdded;
+    if (dateRead != null) map['dateRead'] = dateRead;
+    if (hardcoverStatus != null) map['hardcoverStatus'] = hardcoverStatus;
+    if (hardcoverReview != null) map['hardcoverReview'] = hardcoverReview;
+    if (hardcoverSpoiler) map['hardcoverSpoiler'] = hardcoverSpoiler;
     return map;
   }
+
+  bool get isStub =>
+      personalSignificance == null &&
+      whyItMatters == null &&
+      readingStrategy == null &&
+      abandonmentReason == null &&
+      currentImpression == null &&
+      progress == null;
 }

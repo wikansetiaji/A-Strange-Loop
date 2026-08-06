@@ -1,6 +1,6 @@
 {
   "version": "1.1",
-  "lastUpdated": "2026-07-26",
+  "lastUpdated": "2026-08-04",
   "meta": {
     "name": "Wikan",
     "startedReadingSeriously": "September 2024",
@@ -57,11 +57,17 @@
   "vocabulary": {
     "Sushi": {
       "definition": "Books that permanently reshape how I think.",
-      "examples": ["Permutation City", "Ficciones", "His Master's Voice"]
+      "examples": [
+        "Permutation City",
+        "Ficciones",
+        "His Master's Voice"
+      ]
     },
     "Pickled Ginger": {
       "definition": "Books that are enjoyable without fundamentally changing my worldview.",
-      "examples": ["The City & the City"]
+      "examples": [
+        "The City & the City"
+      ]
     },
     "Wikan Shape": {
       "definition": "One premise. Relentless consequences. Avoid arbitrary expansion.",
@@ -69,8 +75,14 @@
     }
   },
   "favoriteAuthors": {
-    "tierS": ["Jorge Luis Borges", "Stanisław Lem", "Greg Egan"],
-    "tierA": ["Ted Chiang"]
+    "tierS": [
+      "Jorge Luis Borges",
+      "Stanisław Lem",
+      "Greg Egan"
+    ],
+    "tierA": [
+      "Ted Chiang"
+    ]
   },
   "favoriteBooks": {
     "ranked": [
@@ -85,12 +97,22 @@
       "The Dark Forest",
       "Incandescence"
     ],
-    "favoriteNonfiction": ["I Am a Strange Loop", "The Fabric of Reality"],
-    "favoriteShortStoryCollection": ["Ficciones", "The Cyberiad", "Axiomatic"]
+    "favoriteNonfiction": [
+      "I Am a Strange Loop",
+      "The Fabric of Reality"
+    ],
+    "favoriteShortStoryCollection": [
+      "Ficciones",
+      "The Cyberiad",
+      "Axiomatic"
+    ]
   },
   "readerBlindSpots": {
-    "overvalued": ["Big ideas", "Philosophical ambition"],
-    "undervalued": "Character-driven stories and emotional realism \u2014 I value them, but they work best as subtle undercurrents, not primary drivers.",
+    "overvalued": [
+      "Big ideas",
+      "Philosophical ambition"
+    ],
+    "undervalued": "Character-driven stories and emotional realism — I value them, but they work best as subtle undercurrents, not primary drivers.",
     "booksThatChangedMyMind": []
   },
   "readingEvolution": [
@@ -108,7 +130,7 @@
     },
     {
       "year": "Mid-2026",
-      "insight": "Increasingly recognize that intellectual discipline in execution \u2014 not just ambition \u2014 determines whether a book becomes sushi."
+      "insight": "Increasingly recognize that intellectual discipline in execution — not just ambition — determines whether a book becomes sushi."
     },
     {
       "year": "Current",
@@ -123,18 +145,23 @@
   ],
   "currentReading": {
     "book": "The Glass Bead Game",
-    "progress": "33%",
+    "progress": "45%",
     "readingStrategy": "Dreamy flow. Still ask questions.",
-    "notes": "Do not rush to understand the Game itself. Instead understand why a civilization would create it.\n\nReflection at 25%: The monastery's inclusion of art resonates with my childhood goal of balancing left and right brain. Noticing that my own reading still leans left \u2014 even this book is being processed as an intellectual structure."
+    "notes": "Do not rush to understand the Game itself. Instead understand why a civilization would create it.\n\nReflection at 25%: The monastery's inclusion of art resonates with my childhood goal of balancing left and right brain. Noticing that my own reading still leans left — even this book is being processed as an intellectual structure.",
+    "hardcoverId": "442290"
   },
   "recommendationQueue": {
     "highestPriority": [
       {
-        "book": "G\u00f6del, Escher, Bach",
+        "book": "Gödel, Escher, Bach",
         "reason": "Expected to strongly match interests in recursion, consciousness and mathematics."
       }
     ],
     "highConfidence": [
+      {
+        "book": "Oceanic",
+        "reason": "Egan short stories."
+      },
       {
         "book": "Pale Fire",
         "reason": "Literary architecture."
@@ -142,28 +169,521 @@
     ],
     "future": []
   },
-  "observations": [],
+  "observations": [
+    {
+      "evidence": "User expressed relief that the political passages in The Glass Bead Game passed and the contemplative sections returned; previously noted in The City & the City that he 'wanted the premise to remain the protagonist'",
+      "hypothesis": "User prefers novels that sustain a single intellectual register and feels friction when plot-driven or socio-political passages intrude on the central idea",
+      "confidence": 0.55,
+      "logged": "2026-08-04"
+    },
+    {
+      "evidence": "2nd instance of this hypothesis. User again expressed relief that the political passages in The Glass Bead Game have passed and the contemplative sections have returned; previously noted in The City & the City ('wanted the premise to remain the protagonist')",
+      "hypothesis": "User prefers novels that sustain a single intellectual register and feels friction when plot-driven or socio-political passages intrude on the central idea",
+      "confidence": 0.7,
+      "logged": "2026-08-04"
+    }
+  ],
   "books": [
     {
       "title": "Permutation City",
       "status": "Finished",
       "rating": 5,
       "personalSignificance": "Permanent Sushi",
-      "whyItMatters": "The definitive example of relentless exploration of one premise."
+      "whyItMatters": "The definitive example of relentless exploration of one premise.",
+      "hardcoverId": "430706",
+      "author": "Greg Egan",
+      "coverUrl": "https://assets.hardcover.app/editions/27728606/3a5c7d0e-02b9-49af-8eb7-23680e16e864-permutation.jpg",
+      "pages": 310,
+      "hardcoverUrl": "https://hardcover.app/books/permutation-city",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2025-07-02",
+      "hardcoverStatus": "Read"
     },
     {
       "title": "Ficciones",
       "status": "Finished",
       "rating": 5,
       "personalSignificance": "Permanent Sushi",
-      "whyItMatters": "Changed my understanding of literature."
+      "whyItMatters": "Changed my understanding of literature.",
+      "hardcoverId": "777120",
+      "author": "Jorge Luis Borges",
+      "coverUrl": "https://assets.hardcover.app/edition/27607251/07db65332612e3640198ac30d6e6c6e600aa0a5f.jpeg",
+      "pages": 192,
+      "hardcoverUrl": "https://hardcover.app/books/ficciones-hayaller-ve-hikayeler-1944",
+      "dateAdded": "2026-03-19",
+      "dateRead": "2026-03-24",
+      "hardcoverStatus": "Read"
     },
     {
       "title": "The City & the City",
       "status": "Finished",
-      "rating": 4,
+      "rating": 3,
       "personalSignificance": "Excellent Pickled Ginger",
-      "whyItMatters": "Loved the atmosphere. Wanted the premise to remain the protagonist."
+      "whyItMatters": "Loved the atmosphere. Wanted the premise to remain the protagonist.",
+      "hardcoverId": "438690",
+      "author": "China Miéville",
+      "coverUrl": "https://assets.hardcover.app/external_data/39454228/e80cfd9141e0f58880d9e85c6839deb027d2c31c.jpeg",
+      "pages": 372,
+      "hardcoverUrl": "https://hardcover.app/books/the-city-the-city",
+      "dateAdded": "2026-07-05",
+      "dateRead": "2026-07-19",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "The Dark Forest",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "427838",
+      "author": "Cixin Liu",
+      "coverUrl": "https://assets.hardcover.app/edition/16274655/1df47024-edcb-43d9-bd6e-f1b48e024db5.jpg",
+      "pages": 513,
+      "hardcoverUrl": "https://hardcover.app/books/the-dark-forest",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2024-11-01",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "The Glass Bead Game",
+      "status": "Reading",
+      "hardcoverId": "442290",
+      "author": "Hermann Hesse",
+      "coverUrl": "https://assets.hardcover.app/edition/26467514/f368b7045011aefea3f081364a48c91543707322.jpeg",
+      "pages": 580,
+      "hardcoverUrl": "https://hardcover.app/books/the-glass-bead-game",
+      "dateAdded": "2026-07-19",
+      "hardcoverStatus": "Currently Reading"
+    },
+    {
+      "title": "The Book of Sand",
+      "status": "Finished",
+      "rating": 4,
+      "hardcoverId": "442729",
+      "author": "Jorge Luis Borges",
+      "coverUrl": "https://assets.hardcover.app/edition/29198297/f20b964ecb536355d98dba6ec98d3ea2b5541921.jpeg",
+      "pages": 158,
+      "hardcoverUrl": "https://hardcover.app/books/the-book-of-sand-8722f131-caca-44f7-943f-a370703e3de7",
+      "dateAdded": "2026-06-30",
+      "dateRead": "2026-07-05",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "The Fractal Prince",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "441012",
+      "author": "Hannu Rajaniemi",
+      "coverUrl": "https://assets.hardcover.app/edition/30405382/be45b152-f3fc-4441-99ca-8c2c2ff8bcb5.jpg",
+      "pages": 320,
+      "hardcoverUrl": "https://hardcover.app/books/the-fractal-prince",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2025-12-02",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Children of Time",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "427553",
+      "author": "Adrian Tchaikovsky",
+      "coverUrl": "https://assets.hardcover.app/editions/30400632/1512151722488735-25563522.jpg",
+      "pages": 600,
+      "hardcoverUrl": "https://hardcover.app/books/children-of-time",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2025-05-02",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "I Am A Strange Loop",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "260388",
+      "author": "Douglas R. Hofstadter",
+      "coverUrl": "https://assets.hardcover.app/edition/25847491/8312244-L.jpg",
+      "pages": 511,
+      "hardcoverUrl": "https://hardcover.app/books/i-am-a-strange-loop",
+      "dateAdded": "2026-04-26",
+      "dateRead": "2026-05-17",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "The beginning of infinity explanations that transform the world",
+      "status": "Want to Read",
+      "hardcoverId": "485999",
+      "author": "David Deutsch",
+      "coverUrl": "https://assets.hardcover.app/edition/30432248/65316e49b8f1b4760e1d2abe95917b61036ed716.jpeg",
+      "pages": 496,
+      "hardcoverUrl": "https://hardcover.app/books/the-beginning-of-infinity-explanations-that-transform-the-world-2011",
+      "dateAdded": "2026-05-26",
+      "hardcoverStatus": "Want to Read"
+    },
+    {
+      "title": "Rendezvous with Rama",
+      "status": "Finished",
+      "rating": 3,
+      "hardcoverId": "4720",
+      "author": "Arthur C. Clarke",
+      "coverUrl": "https://assets.hardcover.app/edition/20518146/c49aa24a1b0de1b88192d9bb59053ee7dd2af4fc.jpeg",
+      "pages": 288,
+      "hardcoverUrl": "https://hardcover.app/books/rendezvous-with-rama",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2025-02-01",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Death's End",
+      "status": "Finished",
+      "rating": 4,
+      "hardcoverId": "427523",
+      "author": "Cixin Liu",
+      "coverUrl": "https://assets.hardcover.app/edition/31417003/d020132a-e7a8-46ef-a70c-58b1e2042d0e.jpg",
+      "pages": 605,
+      "hardcoverUrl": "https://hardcover.app/books/deaths-end",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2024-12-01",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Piranesi",
+      "status": "Finished",
+      "rating": 3,
+      "hardcoverId": "175280",
+      "author": "Susanna Clarke",
+      "coverUrl": "https://assets.hardcover.app/editions/30480426/ec301cb7-b118-48fd-aa3a-5d336e61c182.jpg",
+      "pages": 245,
+      "hardcoverUrl": "https://hardcover.app/books/piranesi",
+      "dateAdded": "2026-04-22",
+      "dateRead": "2026-04-28",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Eon",
+      "status": "Finished",
+      "rating": 3,
+      "hardcoverId": "19115",
+      "author": "Greg Bear",
+      "coverUrl": "https://assets.hardcover.app/edition/9376479/3567839f-3984-4526-8bdf-a9fcd6aeba7c.jpg",
+      "pages": 504,
+      "hardcoverUrl": "https://hardcover.app/books/eon-1985",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2025-04-02",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Quarantine",
+      "status": "Finished",
+      "rating": 4,
+      "hardcoverId": "430692",
+      "author": "Greg Egan",
+      "coverUrl": "https://assets.hardcover.app/edition/21872647/ade8cd44ab118c00195eb5e297aefecb7267d39b.jpeg",
+      "pages": 288,
+      "hardcoverUrl": "https://hardcover.app/books/quarantine",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2026-03-04",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Exhalation",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "428001",
+      "author": "Ted Chiang",
+      "coverUrl": "https://assets.hardcover.app/editions/26451239/0f1473e5-daee-434b-9194-c4dae3171647.jpeg",
+      "pages": 350,
+      "hardcoverUrl": "https://hardcover.app/books/exhalation",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2026-02-15",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "The Aleph and Other Stories 1933-1969",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "428608",
+      "author": "Jorge Luis Borges",
+      "coverUrl": "https://assets.hardcover.app/edition/27313614/6937894-L.jpg",
+      "pages": 286,
+      "hardcoverUrl": "https://hardcover.app/books/the-aleph-and-other-stories-1933-1969",
+      "dateAdded": "2026-04-13",
+      "dateRead": "2026-04-22",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "The Causal Angel",
+      "status": "Finished",
+      "rating": 4,
+      "hardcoverId": "441020",
+      "author": "Hannu Rajaniemi",
+      "coverUrl": "https://assets.hardcover.app/edition/30405412/3c89de99-457f-4310-b538-703935c6922f.jpg",
+      "pages": 336,
+      "hardcoverUrl": "https://hardcover.app/books/the-causal-angel",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2025-12-31",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Schild's Ladder",
+      "status": "Finished",
+      "rating": 3,
+      "hardcoverId": "430693",
+      "author": "Greg Egan",
+      "coverUrl": "https://assets.hardcover.app/edition/30601310/f0debdf4051bb6ebf383310774abc31c59c3a30d.jpeg",
+      "pages": 352,
+      "hardcoverUrl": "https://hardcover.app/books/schilds-ladder",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2025-08-01",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Anathem",
+      "status": "Finished",
+      "rating": 4,
+      "hardcoverId": "258729",
+      "author": "Neal Stephenson",
+      "coverUrl": "https://assets.hardcover.app/editions/30402165/1328834015406049.jpg",
+      "pages": 1092,
+      "hardcoverUrl": "https://hardcover.app/books/anathem",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2025-09-01",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "The Quantum Thief",
+      "status": "Finished",
+      "rating": 4,
+      "hardcoverId": "435978",
+      "author": "Hannu Rajaniemi",
+      "coverUrl": "https://assets.hardcover.app/edition/542963/10f7d407-a85d-4607-b94c-b4befe70113d.jpg",
+      "pages": 330,
+      "hardcoverUrl": "https://hardcover.app/books/the-quantum-thief",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2025-11-01",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "The Invention of Morel",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "162994",
+      "author": "Adolfo Bioy Casares",
+      "coverUrl": "https://assets.hardcover.app/edition/26705023/990a6fe1d1cf083d5702c76e2a7af95edc3993ee.jpeg",
+      "pages": 122,
+      "hardcoverUrl": "https://hardcover.app/books/the-invention-of-morel",
+      "dateAdded": "2026-05-27",
+      "dateRead": "2026-05-30",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Diaspora",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "441710",
+      "author": "Greg Egan",
+      "coverUrl": "https://assets.hardcover.app/edition/15602641/ed1b3fec070043a1cd159dbf55829272cadf22fa.jpeg",
+      "pages": 295,
+      "hardcoverUrl": "https://hardcover.app/books/diaspora",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2025-06-01",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "The Cyberiad",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "435440",
+      "author": "Stanisław Lem",
+      "coverUrl": "https://assets.hardcover.app/external_data/26693878/3f6c9f6114508bc8b11e4fe0310c006be4933a7b.jpeg",
+      "pages": 244,
+      "hardcoverUrl": "https://hardcover.app/books/the-cyberiad",
+      "dateAdded": "2026-05-17",
+      "dateRead": "2026-05-27",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "The Three-Body Problem",
+      "status": "Finished",
+      "rating": 4,
+      "hardcoverId": "208339",
+      "author": "Cixin Liu",
+      "coverUrl": "https://assets.hardcover.app/edition/30400656/a042ea0a-127c-4e98-8202-f20519445ec3.jpg",
+      "pages": 400,
+      "hardcoverUrl": "https://hardcover.app/books/the-three-body-problem",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2024-10-01",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Pale Fire",
+      "status": "Want to Read",
+      "hardcoverId": "141104",
+      "author": "Vladimir Nabokov",
+      "coverUrl": "https://assets.hardcover.app/edition/13861009/07988f1f82b7bdb58ee50860130bcfbcf754633c.jpeg",
+      "pages": 282,
+      "hardcoverUrl": "https://hardcover.app/books/pale-fire",
+      "dateAdded": "2026-07-19",
+      "hardcoverStatus": "Want to Read"
+    },
+    {
+      "title": "Solaris",
+      "status": "Finished",
+      "rating": 4,
+      "hardcoverId": "372267",
+      "author": "Stanisław Lem",
+      "coverUrl": "https://assets.hardcover.app/edition/15545828/c908afb9139ca70866af560bfdd021c655ad53f3.jpeg",
+      "pages": 222,
+      "hardcoverUrl": "https://hardcover.app/books/solaris",
+      "dateAdded": "2026-05-30",
+      "dateRead": "2026-06-07",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "The Fabric of Reality",
+      "status": "Finished",
+      "rating": 4,
+      "hardcoverId": "504688",
+      "author": "David Deutsch",
+      "coverUrl": "https://assets.hardcover.app/edition/30455073/b169d3d457da09b6dafc994da4b423143aa8a0dd.jpeg",
+      "hardcoverUrl": "https://hardcover.app/books/the-fabric-of-reality",
+      "dateAdded": "2026-05-31",
+      "dateRead": "2026-06-24",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "The Metamorphosis of Prime Intellect",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "87312",
+      "author": "Roger Williams",
+      "coverUrl": "https://assets.hardcover.app/edition/3659606/dfcba4b7dc603133fd0787a9f119e582a6330883.jpeg",
+      "pages": 175,
+      "hardcoverUrl": "https://hardcover.app/books/the-metamorphosis-of-prime-intellect",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2025-10-02",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Axiomatic",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "430694",
+      "author": "Greg Egan",
+      "coverUrl": "https://assets.hardcover.app/external_data/35466317/685e73d04d05cff4d914b2752ef3b75c0b270af7.jpeg",
+      "pages": 256,
+      "hardcoverUrl": "https://hardcover.app/books/axiomatic",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2026-02-28",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Stories of Your Life and Others",
+      "status": "Finished",
+      "rating": 4,
+      "hardcoverId": "94521",
+      "author": "Ted Chiang",
+      "coverUrl": "https://assets.hardcover.app/edition/30448261/e263f538-788c-40fa-8160-73378ca2c00a.jpg",
+      "pages": 320,
+      "hardcoverUrl": "https://hardcover.app/books/stories-of-your-life-and-others",
+      "dateAdded": "2026-04-07",
+      "dateRead": "2026-04-15",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "There Is No Antimemetics Division",
+      "status": "Abandoned",
+      "rating": 2,
+      "hardcoverId": "455735",
+      "author": "qntm",
+      "coverUrl": "https://assets.hardcover.app/external_data/193765/b3af02e08dc537afe1627e9cc6a20131874e056d.jpeg",
+      "pages": 272,
+      "hardcoverUrl": "https://hardcover.app/books/there-is-no-antimemetics-division",
+      "dateAdded": "2026-06-24",
+      "hardcoverStatus": "Did Not Finish"
+    },
+    {
+      "title": "Gödel, Escher, Bach: an Eternal Golden Braid",
+      "status": "Want to Read",
+      "hardcoverId": "111985",
+      "author": "Douglas R. Hofstadter",
+      "coverUrl": "https://assets.hardcover.app/external_data/3662971/b8e58d517c72ceaf857b7e58a247d2314576b74a.jpeg",
+      "pages": 832,
+      "hardcoverUrl": "https://hardcover.app/books/godel-escher-bach",
+      "dateAdded": "2026-05-17",
+      "hardcoverStatus": "Want to Read"
+    },
+    {
+      "title": "Blindsight",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "384771",
+      "author": "Peter Watts",
+      "coverUrl": "https://assets.hardcover.app/book_mappings/7333230/0c3d4d7893e47e39bcbde68fcb6c343a2be66a24.jpeg",
+      "pages": 384,
+      "hardcoverUrl": "https://hardcover.app/books/blindsight",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2025-03-01",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Incandescence",
+      "status": "Finished",
+      "rating": 4,
+      "hardcoverId": "467677",
+      "author": "Greg Egan",
+      "coverUrl": "https://assets.hardcover.app/edition/30385512/2425528._SX98_.jpg",
+      "pages": 233,
+      "hardcoverUrl": "https://hardcover.app/books/incandescence",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2026-01-15",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "The Selfish Gene",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "428232",
+      "author": "Richard Dawkins",
+      "coverUrl": "https://assets.hardcover.app/external_data/312815/54310bbacdd5c06883bbb01eadfb559c4c6969c0.jpeg",
+      "pages": 657,
+      "hardcoverUrl": "https://hardcover.app/books/the-selfish-gene",
+      "dateAdded": "2026-03-07",
+      "dateRead": "2026-03-12",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Distress",
+      "status": "Finished",
+      "rating": 4,
+      "hardcoverId": "5208",
+      "author": "Greg Egan",
+      "coverUrl": "https://assets.hardcover.app/external_data/60993175/c36542abee6eefec8141dc2ac1a4321623bb8f24.jpeg",
+      "pages": 464,
+      "hardcoverUrl": "https://hardcover.app/books/distress",
+      "dateAdded": "2026-03-24",
+      "dateRead": "2026-04-07",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "His Master's Voice",
+      "status": "Finished",
+      "rating": 5,
+      "hardcoverId": "535562",
+      "author": "Stanisław Lem",
+      "coverUrl": "https://assets.hardcover.app/book_mappings/7335726/689b87de3ce39be7d3e6ad745689c364b4048fbe.jpeg",
+      "pages": 199,
+      "hardcoverUrl": "https://hardcover.app/books/his-masters-voice",
+      "dateAdded": "2026-03-08",
+      "dateRead": "2026-03-19",
+      "hardcoverStatus": "Read"
+    },
+    {
+      "title": "Oceanic",
+      "status": "Want to Read",
+      "hardcoverId": "430688",
+      "author": "Greg Egan",
+      "coverUrl": "https://assets.hardcover.app/external_data/3269112/c8f97666fbd5447d724c52ee71b0d3a6e3c1ee1e.jpeg",
+      "pages": 512,
+      "hardcoverUrl": "https://hardcover.app/books/oceanic",
+      "dateAdded": "2026-08-04",
+      "hardcoverStatus": "Want to Read"
     }
   ]
 }

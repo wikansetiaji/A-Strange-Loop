@@ -1,4 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
+import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:a_strange_loop/providers/chat_state.dart';
@@ -20,17 +24,14 @@ class _BrainScreenState extends State<BrainScreen> {
   @override
   void initState() {
     super.initState();
-    final cached = context.read<ChatState>().brainContent;
-    if (cached != null) {
-      _brainContent = cached;
-    } else {
-      _load();
-    }
+    _load();
   }
 
   Future<void> _load() async {
     try {
-      final json = await context.read<ChatState>().loadBrain();
+      final chatState = context.read<ChatState>();
+      unawaited(chatState.reconcileHardcover());
+      final json = await chatState.loadBrain(forceRefresh: true);
       if (mounted) {
         setState(() {
           _brainContent = json;
@@ -127,6 +128,7 @@ class _BrainScreenState extends State<BrainScreen> {
     Brain brain;
     try {
       brain = Brain.fromJson(jsonDecode(json) as Map<String, dynamic>);
+      brain.sortBooksByRecent();
     } catch (_) {
       return _buildError();
     }
@@ -594,42 +596,61 @@ class _BrainScreenState extends State<BrainScreen> {
         for (final book in books)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: _box(context, child: Column(
+            child: _box(context, child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        book.title,
-                        style: AppTextStyles.display(context).copyWith(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          height: 1.3,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    _statusChip(context, book.status),
-                  ],
-                ),
-                if (book.rating != null) ...[
-                  const SizedBox(height: 8),
-                  _rating(context, book.rating!),
+                if (book.coverUrl != null) ...[
+                  SizedBox(
+                    width: 60,
+                    height: 90,
+                    child: _coverImage(book.coverUrl!),
+                  ),
+                  const SizedBox(width: 16),
                 ],
-                if (book.personalSignificance != null)
-                  _kv(context, 'Significance', book.personalSignificance!),
-                if (book.whyItMatters != null)
-                  _kv(context, 'Why It Matters', book.whyItMatters!),
-                if (book.progress != null)
-                  _kv(context, 'Progress', book.progress!),
-                if (book.currentImpression != null)
-                  _kv(context, 'Impression', book.currentImpression!),
-                if (book.readingStrategy != null)
-                  _kv(context, 'Strategy', book.readingStrategy!),
-                if (book.abandonmentReason != null)
-                  _kv(context, 'Abandoned', book.abandonmentReason!),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              book.title,
+                              style:
+                                  AppTextStyles.display(context).copyWith(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          _statusChip(context, book.status),
+                        ],
+                      ),
+                      if (book.rating != null) ...[
+                        const SizedBox(height: 8),
+                        _ratingRow(context, book.rating!),
+                      ],
+                      if (book.personalSignificance != null)
+                        _kv(context, 'Significance',
+                            book.personalSignificance!),
+                      if (book.whyItMatters != null)
+                        _kv(context, 'Why It Matters', book.whyItMatters!),
+                      if (book.progress != null)
+                        _kv(context, 'Progress', book.progress!),
+                      if (book.currentImpression != null)
+                        _kv(context, 'Impression',
+                            book.currentImpression!),
+                      if (book.readingStrategy != null)
+                        _kv(context, 'Strategy', book.readingStrategy!),
+                      if (book.abandonmentReason != null)
+                        _kv(context, 'Abandoned',
+                            book.abandonmentReason!),
+                    ],
+                  ),
+                ),
               ],
             )),
           ),
@@ -709,24 +730,27 @@ class _BrainScreenState extends State<BrainScreen> {
     );
   }
 
-  Widget _rating(BuildContext context, double rating) {
+  Widget _ratingRow(BuildContext context, double rating) {
     final cs = Theme.of(context).colorScheme;
-    final filled = rating.round();
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (var i = 0; i < 5; i++)
-          Icon(
-            i < filled ? Icons.star_sharp : Icons.star_outline_sharp,
+        ...List.generate(5, (i) {
+          return Icon(
+            i < rating.round() ? Icons.star_sharp : Icons.star_outline_sharp,
             size: 13,
-            color: i < filled ? cs.secondary : cs.onSurface.withAlpha(60),
-          ),
-        const SizedBox(width: 8),
+            color: i < rating.round()
+                ? cs.secondary
+                : cs.onSurface.withAlpha(50),
+          );
+        }),
+        const SizedBox(width: 6),
         Text(
-          '${rating.toStringAsFixed(1)} / 5',
+          rating.toStringAsFixed(1),
           style: AppTextStyles.chatCaption(context).copyWith(
-            color: cs.onSurface.withAlpha(120),
+            color: cs.onSurface.withAlpha(140),
+            fontSize: 13,
           ),
         ),
       ],
@@ -738,6 +762,19 @@ class _BrainScreenState extends State<BrainScreen> {
     if (confidence >= 0.7) return cs.primary;
     if (confidence >= 0.4) return cs.tertiary;
     return cs.onSurface.withAlpha(120);
+  }
+
+  Widget _coverImage(String url) {
+    final viewId = 'cover-${url.hashCode}';
+    ui_web.platformViewRegistry.registerViewFactory(viewId, (int _) {
+      final img = html.ImageElement()
+        ..src = url
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.objectFit = 'cover';
+      return img;
+    });
+    return HtmlElementView(viewType: viewId);
   }
 
   double? _progressFraction(String progress) {
