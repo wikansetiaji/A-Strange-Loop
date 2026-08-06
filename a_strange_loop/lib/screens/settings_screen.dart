@@ -14,8 +14,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final TextEditingController _apiKeyController = TextEditingController();
-  bool _apiKeyVisible = false;
   bool _syncInProgress = false;
   String? _syncResult;
 
@@ -32,7 +30,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    _apiKeyController.dispose();
     super.dispose();
   }
 
@@ -131,61 +128,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Sync your reading activity between your Reading Brain and Hardcover.app. Your brain is the source of truth — Hardcover is a best-effort mirror.',
                 style: AppTextStyles.chatBody(context).copyWith(
                   color: cs.onSurface.withAlpha(160),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'API Key',
-                style: AppTextStyles.display(context).copyWith(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: cs.outline, width: 1),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _apiKeyController,
-                        obscureText: !_apiKeyVisible,
-                        style: AppTextStyles.chatBody(context).copyWith(
-                          fontSize: 13,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: 'Paste your Hardcover API key...',
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        _apiKeyVisible
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
-                        size: 18,
-                        color: cs.onSurface.withAlpha(120),
-                      ),
-                      onPressed: () => setState(
-                          () => _apiKeyVisible = !_apiKeyVisible),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Get your API key from hardcover.app/account/api',
-                style: AppTextStyles.chatCaption(context).copyWith(
-                  color: cs.onSurface.withAlpha(100),
                 ),
               ),
               const SizedBox(height: 32),
