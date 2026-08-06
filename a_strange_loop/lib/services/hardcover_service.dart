@@ -5,7 +5,17 @@ import 'package:a_strange_loop/models/hardcover_models.dart';
 
 class HardcoverService {
   final http.Client _client = http.Client();
-  String apiKey = hardcoverApiKey;
+  final String apiKey;
+  final String userId;
+  final String apiEndpoint;
+
+  HardcoverService({
+    String? apiKey,
+    String? userId,
+    String? apiEndpoint,
+  })  : apiKey = apiKey ?? hardcoverApiKey,
+        userId = userId ?? hardcoverUserId.toString(),
+        apiEndpoint = apiEndpoint ?? hardcoverApiEndpoint;
 
   static int statusToId(String status) {
     switch (status) {
@@ -37,7 +47,7 @@ class HardcoverService {
     final query = '''
 query GetUserBooks {
   user_books(
-    where: { user_id: { _eq: $hardcoverUserId }, status_id: { _in: [1, 2, 3, 4, 5] } }
+    where: { user_id: { _eq: $userId }, status_id: { _in: [1, 2, 3, 4, 5] } }
     limit: 200
   ) {
     id
@@ -184,7 +194,7 @@ mutation InsertUserBook {
     }
 
     if (pagesRead != null && userBookId != null) {
-      await _insertReadingProgress(userBookId, pagesRead);
+      await _upsertReadingProgress(userBookId, pagesRead);
     }
 
     return userBookId;
@@ -193,7 +203,7 @@ mutation InsertUserBook {
   Future<List<int>> _findUserBookIds(int bookId) async {
     final query = '''
 query FindUserBooks {
-  user_books(where: { book_id: { _eq: $bookId }, user_id: { _eq: $hardcoverUserId } }) { id }
+  user_books(where: { book_id: { _eq: $bookId }, user_id: { _eq: $userId } }) { id }
 }
 ''';
     try {
@@ -205,8 +215,22 @@ query FindUserBooks {
     }
   }
 
-  Future<void> _insertReadingProgress(int userBookId, int pagesRead) async {
-    final mutation = '''
+  Future<void> _upsertReadingProgress(int userBookId, int pagesRead) async {
+    final existingIds = await _findUserBookReadIds(userBookId);
+    if (existingIds.isNotEmpty) {
+      final mutation = '''
+mutation UpdateReadingProgress {
+  update_user_book_read(
+    id: ${existingIds.first}
+    object: { progress_pages: $pagesRead }
+  ) {
+    id
+  }
+}
+''';
+      await _graphqlRequest(mutation);
+    } else {
+      final mutation = '''
 mutation InsertReadingProgress {
   insert_user_book_read(
     user_book_id: $userBookId
@@ -216,7 +240,23 @@ mutation InsertReadingProgress {
   }
 }
 ''';
-    await _graphqlRequest(mutation);
+      await _graphqlRequest(mutation);
+    }
+  }
+
+  Future<List<int>> _findUserBookReadIds(int userBookId) async {
+    final query = '''
+query FindUserBookReads {
+  user_book_reads(where: { user_book_id: { _eq: $userBookId } }, limit: 1) { id }
+}
+''';
+    try {
+      final data = await _graphqlRequest(query);
+      final list = data['user_book_reads'] as List? ?? [];
+      return list.map((e) => (e as Map<String, dynamic>)['id'] as int).toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<void> deleteUserBook(int bookId) async {
@@ -259,7 +299,7 @@ mutation CreateBook {
       }
       try {
         final response = await _client.post(
-          Uri.parse(hardcoverApiEndpoint),
+          Uri.parse(apiEndpoint),
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer $apiKey',
@@ -293,29 +333,6 @@ mutation CreateBook {
     }
     throw lastError ?? Exception('Hardcover request failed after $retries retries');
   }
-
-  Map<String, dynamic> get searchBooksTool => {
-        'type': 'function',
-        'function': {
-          'name': 'searchBooks',
-          'description':
-              'Search for books on Hardcover.app. Use this to find book '
-                  'metadata, discover similar books, or look up books by '
-                  'title/author/topic. Returns up to 5 results with id, '
-                  'title, author, cover, rating, and description.',
-          'parameters': {
-            'type': 'object',
-            'properties': {
-              'query': {
-                'type': 'string',
-                'description':
-                    'The search query — book title, author name, or topic keywords',
-              },
-            },
-            'required': ['query'],
-          },
-        },
-      };
 
   void dispose() {
     _client.close();

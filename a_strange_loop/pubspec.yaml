@@ -17,6 +17,7 @@ dependencies:
   flutter_markdown: ^0.7.0
   tiktoken: ^1.0.3
   google_fonts: ^6.0.0
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:

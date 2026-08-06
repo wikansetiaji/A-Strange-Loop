@@ -47,122 +47,17 @@ void main() {
         'books': [],
       });
 
-  group('BrainParser.parse', () {
-    test('splits prose and blocks', () {
-      const response = '''
-Hey! Let me add that book to your reading brain.
-
-BEGIN_JSON_APPEND_BOOK
-{
-  "title": "Test Book",
-  "status": "Finished",
-  "rating": 4.5,
-  "personalSignificance": "Good",
-  "whyItMatters": "It mattered.",
-  "hardcoverReview": "Great read",
-  "hardcoverSpoiler": false
-}
-END_JSON_APPEND_BOOK
-
-I also have an observation about this.
-
-BEGIN_JSON_OBSERVATION
-{
-  "evidence": "User mentioned enjoying short chapters",
-  "hypothesis": "User prefers concise writing",
-  "confidence": 0.6,
-  "logged": "2026-08-01"
-}
-END_JSON_OBSERVATION
-''';
-
-      final parsed = BrainParser.parse(response);
-
-      expect(parsed.prose,
-          contains('Hey! Let me add that book'));
-      expect(parsed.prose,
-          contains('I also have an observation about this.'));
-      expect(parsed.blocks.length, 2);
-      expect(parsed.blocks[0].type, BlockType.appendBook);
-      expect(parsed.blocks[0].jsonData['title'], 'Test Book');
-      expect(parsed.blocks[0].jsonData['rating'], 4.5);
-      expect(parsed.blocks[0].jsonData['hardcoverReview'], 'Great read');
-      expect(parsed.blocks[0].jsonData['hardcoverSpoiler'], false);
-      expect(parsed.blocks[1].type, BlockType.observation);
-      expect(parsed.blocks[1].jsonData['confidence'], 0.6);
-    });
-
-    test('parses bare markers without BEGIN_JSON_ prefix', () {
-      const response = '''
-ADDING...
-
-APPEND_BOOK
-{
-  "title": "Bare Marker Book",
-  "status": "Want to Read"
-}
-END_APPEND_BOOK
-''';
-
-      final parsed = BrainParser.parse(response);
-      expect(parsed.blocks.length, 1);
-      expect(parsed.blocks[0].type, BlockType.appendBook);
-      expect(parsed.blocks[0].jsonData['title'], 'Bare Marker Book');
-    });
-
-    test('handles PATCH blocks', () {
-      const response = '''
-BEGIN_JSON_PATCH
-{
-  "reason": "User asked",
-  "evidence": "User asked",
-  "confidence": 1.0,
-  "targetSection": "ACTIVE_QUESTIONS",
-  "replacementContent": ["What is meaning?"]
-}
-END_JSON_PATCH
-''';
-
-      final parsed = BrainParser.parse(response);
-      expect(parsed.blocks.length, 1);
-      expect(parsed.blocks[0].type, BlockType.patch);
-      expect(parsed.blocks[0].jsonData['targetSection'],
-          'ACTIVE_QUESTIONS');
-      expect(parsed.blocks[0].jsonData['replacementContent'],
-          ['What is meaning?']);
-    });
-
-    test('ignores malformed JSON inside block', () {
-      const response = '''
-BEGIN_JSON_APPEND_BOOK
-{not valid json}
-END_JSON_APPEND_BOOK
-''';
-      final parsed = BrainParser.parse(response);
-      expect(parsed.blocks.length, 0);
-    });
-  });
-
-  group('BrainParser.applyBlocks', () {
-    test('APPEND_BOOK adds book to books array', () {
-      final brainJson = minimalBrainJson();
-      final blocks = [
-        OperationBlock(
-          type: BlockType.appendBook,
-          rawText: '',
-          jsonData: {
-            'title': 'New Book',
-            'status': 'Finished',
-            'rating': 4,
-            'personalSignificance': 'Test',
-            'whyItMatters': 'Testing',
-            'hardcoverReview': 'Loved it',
-            'hardcoverSpoiler': false,
-          },
-        ),
-      ];
-
-      final result = BrainParser.applyBlocks(brainJson, blocks);
+  group('BrainParser static methods', () {
+    test('appendBook adds book to books array', () {
+      final result = BrainParser.appendBook(minimalBrainJson(), {
+        'title': 'New Book',
+        'status': 'Finished',
+        'rating': 4,
+        'personalSignificance': 'Test',
+        'whyItMatters': 'Testing',
+        'hardcoverReview': 'Loved it',
+        'hardcoverSpoiler': false,
+      });
 
       final updated = jsonDecode(result.brain) as Map<String, dynamic>;
       final books = updated['books'] as List;
@@ -171,11 +66,9 @@ END_JSON_APPEND_BOOK
       expect(books[0]['status'], 'Finished');
       expect(books[0]['rating'], 4);
       expect(books[0]['hardcoverReview'], 'Loved it');
-      // BUG: false is omitted from JSON — key doesn't exist
-      expect(books[0].containsKey('hardcoverSpoiler'), isFalse);
     });
 
-    test('UPDATE_BOOK replaces existing book', () {
+    test('updateBook replaces existing book', () {
       final brainJson = minimalBrainJson();
       final brain = jsonDecode(brainJson) as Map<String, dynamic>;
       brain['books'] = [
@@ -194,30 +87,19 @@ END_JSON_APPEND_BOOK
       ];
       final enrichedJson = jsonEncode(brain);
 
-      final blocks = [
-        OperationBlock(
-          type: BlockType.updateBook,
-          rawText: '',
-          jsonData: {
-            'targetTitle': 'Old Book',
-            'book': {
-              'title': 'Old Book',
-              'status': 'Finished',
-              'rating': 5,
-              'personalSignificance': 'Sushi',
-              'whyItMatters': 'Life changing',
-            },
-          },
-        ),
-      ];
+      final result = BrainParser.updateBook(enrichedJson, 'Old Book', {
+        'title': 'Old Book',
+        'status': 'Finished',
+        'rating': 5,
+        'personalSignificance': 'Sushi',
+        'whyItMatters': 'Life changing',
+      });
 
-      final result = BrainParser.applyBlocks(enrichedJson, blocks);
       final updated = jsonDecode(result.brain) as Map<String, dynamic>;
       final books = updated['books'] as List;
       expect(books.length, 1);
       expect(books[0]['status'], 'Finished');
       expect(books[0]['rating'], 5);
-
       expect(books[0]['hardcoverId'], '123');
       expect(books[0]['author'], 'Some Author');
       expect(books[0]['coverUrl'], 'http://example.com/cover.jpg');
@@ -227,7 +109,7 @@ END_JSON_APPEND_BOOK
       expect(books[0]['dateAdded'], '2026-01-01');
     });
 
-    test('DELETE_BOOK removes book', () {
+    test('deleteBook removes book', () {
       final brainJson = minimalBrainJson();
       final brain = jsonDecode(brainJson) as Map<String, dynamic>;
       brain['books'] = [
@@ -236,45 +118,28 @@ END_JSON_APPEND_BOOK
       ];
       final withBooks = jsonEncode(brain);
 
-      final blocks = [
-        OperationBlock(
-          type: BlockType.deleteBook,
-          rawText: '',
-          jsonData: {'targetTitle': 'To Delete'},
-        ),
-      ];
-
-      final result = BrainParser.applyBlocks(withBooks, blocks);
+      final result = BrainParser.deleteBook(withBooks, 'To Delete');
       final updated = jsonDecode(result.brain) as Map<String, dynamic>;
       final books = updated['books'] as List;
       expect(books.length, 1);
       expect(books[0]['title'], 'Keep');
     });
 
-    test('PATCH CURRENT_READING sets book in progress', () {
-      final brainJson = minimalBrainJson();
+    test('patchBrain sets CURRENT_READING', () {
+      final result = BrainParser.patchBrain(
+        minimalBrainJson(),
+        'CURRENT_READING',
+        {
+          'book': 'New Read',
+          'progress': '10%',
+          'readingStrategy': 'Slow',
+          'notes': 'Interesting so far',
+          'hardcoverId': '42',
+        },
+        reason: 'User started a book',
+        confidence: 1.0,
+      );
 
-      final blocks = [
-        OperationBlock(
-          type: BlockType.patch,
-          rawText: '',
-          jsonData: {
-            'reason': 'User started a book',
-            'evidence': 'User said they started',
-            'confidence': 1.0,
-            'targetSection': 'CURRENT_READING',
-            'replacementContent': {
-              'book': 'New Read',
-              'progress': '10%',
-              'readingStrategy': 'Slow',
-              'notes': 'Interesting so far',
-              'hardcoverId': '42',
-            },
-          },
-        ),
-      ];
-
-      final result = BrainParser.applyBlocks(brainJson, blocks);
       final updated = jsonDecode(result.brain) as Map<String, dynamic>;
       final cr = updated['currentReading'] as Map<String, dynamic>;
       expect(cr['book'], 'New Read');
@@ -282,7 +147,7 @@ END_JSON_APPEND_BOOK
       expect(cr['hardcoverId'], '42');
     });
 
-    test('PATCH CURRENT_READING with null clears it', () {
+    test('patchBrain with null clears CURRENT_READING', () {
       final brainJson = minimalBrainJson();
       final brain = jsonDecode(brainJson) as Map<String, dynamic>;
       brain['currentReading'] = {
@@ -293,52 +158,37 @@ END_JSON_APPEND_BOOK
       };
       final withCr = jsonEncode(brain);
 
-      const response = '''
-BEGIN_JSON_PATCH
-{
-  "reason": "Book finished",
-  "evidence": "User finished",
-  "confidence": 1.0,
-  "targetSection": "CURRENT_READING",
-  "replacementContent": null
-}
-END_JSON_PATCH
-''';
+      final result = BrainParser.patchBrain(
+        withCr,
+        'CURRENT_READING',
+        null,
+        reason: 'Book finished',
+        confidence: 1.0,
+      );
 
-      final parsed = BrainParser.parse(response);
-      final result = BrainParser.applyBlocks(withCr, parsed.blocks);
       final updated = jsonDecode(result.brain) as Map<String, dynamic>;
       expect(updated['currentReading'], isNull);
     });
 
-    test('PATCH ACTIVE_QUESTIONS replaces questions', () {
-      final brainJson = minimalBrainJson();
+    test('patchBrain ACTIVE_QUESTIONS replaces questions', () {
+      final result = BrainParser.patchBrain(
+        minimalBrainJson(),
+        'ACTIVE_QUESTIONS',
+        [
+          'What is the nature of reality?',
+          'How does consciousness emerge?',
+        ],
+        reason: 'Discovery',
+        confidence: 0.85,
+      );
 
-      final blocks = [
-        OperationBlock(
-          type: BlockType.patch,
-          rawText: '',
-          jsonData: {
-            'reason': 'Discovery',
-            'evidence': 'Pattern observed',
-            'confidence': 0.85,
-            'targetSection': 'ACTIVE_QUESTIONS',
-            'replacementContent': [
-              'What is the nature of reality?',
-              'How does consciousness emerge?',
-            ],
-          },
-        ),
-      ];
-
-      final result = BrainParser.applyBlocks(brainJson, blocks);
       final updated = jsonDecode(result.brain) as Map<String, dynamic>;
       final questions = updated['activeQuestions'] as List;
       expect(questions.length, 2);
       expect(questions[0], 'What is the nature of reality?');
     });
 
-    test('OBSERVATION promotion: 3 similar hypotheses remove first 2', () {
+    test('addObservation: 3 similar hypotheses remove first 2', () {
       final brainJson = minimalBrainJson();
       final brain = jsonDecode(brainJson) as Map<String, dynamic>;
       brain['observations'] = [
@@ -357,37 +207,39 @@ END_JSON_PATCH
       ];
       final withObs = jsonEncode(brain);
 
-      final blocks = [
-        OperationBlock(
-          type: BlockType.observation,
-          rawText: '',
-          jsonData: {
-            'evidence': 'Ev 3',
-            'hypothesis': 'user values conciseness over emotional depth always',
-            'confidence': 0.55,
-            'logged': '2026-08-01',
-          },
-        ),
-      ];
+      final result = BrainParser.addObservation(withObs, {
+        'evidence': 'Ev 3',
+        'hypothesis': 'user values conciseness over emotional depth always',
+        'confidence': 0.55,
+        'logged': '2026-08-01',
+      });
 
-      final result = BrainParser.applyBlocks(withObs, blocks);
       final updated = jsonDecode(result.brain) as Map<String, dynamic>;
       final obs = updated['observations'] as List;
-
       expect(obs.length, 0);
     });
 
-    test('updates lastUpdated after applying blocks', () {
-      final brainJson = minimalBrainJson();
-      final blocks = [
-        OperationBlock(
-          type: BlockType.appendBook,
-          rawText: '',
-          jsonData: {'title': 'X', 'status': 'Want to Read'},
-        ),
-      ];
+    test('addObservation adds observation normally', () {
+      final result = BrainParser.addObservation(minimalBrainJson(), {
+        'evidence': 'User mentioned enjoying short chapters',
+        'hypothesis': 'User prefers concise writing',
+        'confidence': 0.6,
+        'logged': '2026-08-01',
+      });
 
-      final result = BrainParser.applyBlocks(brainJson, blocks);
+      final updated = jsonDecode(result.brain) as Map<String, dynamic>;
+      final obs = updated['observations'] as List;
+      expect(obs.length, 1);
+      expect(obs[0]['hypothesis'], 'User prefers concise writing');
+      expect(obs[0]['confidence'], 0.6);
+    });
+
+    test('updates lastUpdated after mutation', () {
+      final result = BrainParser.appendBook(minimalBrainJson(), {
+        'title': 'X',
+        'status': 'Want to Read',
+      });
+
       final updated = jsonDecode(result.brain) as Map<String, dynamic>;
       expect(updated['lastUpdated'], isNot('2026-08-01'));
       expect(updated['lastUpdated'], matches(RegExp(r'\d{4}-\d{2}-\d{2}')));
@@ -395,33 +247,132 @@ END_JSON_PATCH
 
     test('generates patch log entries', () {
       final brainJson = minimalBrainJson();
-      final blocks = [
+      final brain = jsonDecode(brainJson) as Map<String, dynamic>;
+      brain['books'] = [{'title': 'To Delete', 'status': 'Want to Read'}];
+      final withBooks = jsonEncode(brain);
+
+      final result = BrainParser.deleteBook(withBooks, 'To Delete');
+      expect(result.log.length, 1);
+      expect(result.log[0].operation, 'DELETE_BOOK');
+      expect(result.log[0].target, 'To Delete');
+    });
+
+    test('patchBrain generates log with confidence and reason', () {
+      final result = BrainParser.patchBrain(
+        minimalBrainJson(),
+        'ACTIVE_QUESTIONS',
+        ['Q'],
+        reason: 'Test',
+        confidence: 0.9,
+      );
+
+      expect(result.log.length, 1);
+      expect(result.log[0].operation, 'PATCH');
+      expect(result.log[0].target, 'ACTIVE_QUESTIONS');
+      expect(result.log[0].confidence, 0.9);
+      expect(result.log[0].reason, 'Test');
+    });
+  });
+
+  group('BrainParser.applyBlocks (legacy)', () {
+    test('APPEND_BOOK adds book', () {
+      final result = BrainParser.applyBlocks(minimalBrainJson(), [
         OperationBlock(
           type: BlockType.appendBook,
           rawText: '',
-          jsonData: {'title': 'Logged Book', 'status': 'Finished'},
+          jsonData: {
+            'title': 'New Book',
+            'status': 'Finished',
+            'rating': 4,
+            'hardcoverReview': 'Loved it',
+            'hardcoverSpoiler': false,
+          },
+        ),
+      ]);
+
+      final updated = jsonDecode(result.brain) as Map<String, dynamic>;
+      final books = updated['books'] as List;
+      expect(books.length, 1);
+      expect(books[0]['title'], 'New Book');
+    });
+
+    test('PATCH CURRENT_READING with null clears it', () {
+      final brainJson = minimalBrainJson();
+      final brain = jsonDecode(brainJson) as Map<String, dynamic>;
+      brain['currentReading'] = {
+        'book': 'Old Read',
+        'progress': '50%',
+        'readingStrategy': '',
+        'notes': '',
+      };
+      final withCr = jsonEncode(brain);
+
+      final result = BrainParser.applyBlocks(withCr, [
+        OperationBlock(
+          type: BlockType.patch,
+          rawText: '',
+          jsonData: {
+            'reason': 'Book finished',
+            'evidence': 'User finished',
+            'confidence': 1.0,
+            'targetSection': 'CURRENT_READING',
+            'replacementContent': null,
+          },
+        ),
+      ]);
+
+      final updated = jsonDecode(result.brain) as Map<String, dynamic>;
+      expect(updated['currentReading'], isNull);
+    });
+
+    test('FINISH SIGNAL: APPEND_BOOK + clear CURRENT_READING', () {
+      final brainJson = minimalBrainJson();
+      final brain = jsonDecode(brainJson) as Map<String, dynamic>;
+      brain['currentReading'] = {
+        'book': 'The Glass Bead Game',
+        'progress': '33%',
+        'readingStrategy': 'Dreamy',
+        'notes': 'Fascinating',
+      };
+      final withCr = jsonEncode(brain);
+
+      final result = BrainParser.applyBlocks(withCr, [
+        OperationBlock(
+          type: BlockType.appendBook,
+          rawText: '',
+          jsonData: {
+            'title': 'The Glass Bead Game',
+            'status': 'Finished',
+            'rating': 4.5,
+            'personalSignificance': 'Sushi',
+            'whyItMatters': 'A monumental exploration of intellectual synthesis.',
+            'hardcoverReview': 'Hesse at his most ambitious.',
+            'hardcoverSpoiler': false,
+          },
         ),
         OperationBlock(
           type: BlockType.patch,
           rawText: '',
           jsonData: {
-            'reason': 'Test',
-            'evidence': 'Test',
-            'confidence': 0.9,
-            'targetSection': 'ACTIVE_QUESTIONS',
-            'replacementContent': ['Q'],
+            'reason': 'User finished the book',
+            'evidence': 'FINISH SIGNAL',
+            'confidence': 1.0,
+            'targetSection': 'CURRENT_READING',
+            'replacementContent': null,
           },
         ),
-      ];
+      ]);
 
-      final result = BrainParser.applyBlocks(brainJson, blocks);
-      expect(result.log.length, 2);
-      expect(result.log[0].operation, 'APPEND_BOOK');
-      expect(result.log[0].target, 'Logged Book');
-      expect(result.log[1].operation, 'PATCH');
-      expect(result.log[1].target, 'ACTIVE_QUESTIONS');
-      expect(result.log[1].confidence, 0.9);
-      expect(result.log[1].reason, 'Test');
+      final updated = jsonDecode(result.brain) as Map<String, dynamic>;
+      expect(updated['currentReading'], isNull);
+
+      final books = updated['books'] as List;
+      expect(books.length, 1);
+      expect(books[0]['title'], 'The Glass Bead Game');
+      expect(books[0]['status'], 'Finished');
+      expect(books[0]['rating'], 4.5);
+      expect(books[0]['personalSignificance'], 'Sushi');
+      expect(books[0]['hardcoverReview'], 'Hesse at his most ambitious.');
     });
   });
 
@@ -436,8 +387,6 @@ END_JSON_PATCH
       });
 
       final ctx = brain.toMarkdownForContext(maxBooks: 5);
-
-      // Count BOOK section headers
       final bookCount = '# BOOK\n'.allMatches(ctx).length;
       expect(bookCount, 5);
     });
@@ -553,64 +502,7 @@ END_JSON_PATCH
     });
   });
 
-  group('Full pipeline integration', () {
-    test('FINISH SIGNAL: APPEND_BOOK + clear CURRENT_READING', () {
-      final brainJson = minimalBrainJson();
-      final brain = jsonDecode(brainJson) as Map<String, dynamic>;
-      brain['currentReading'] = {
-        'book': 'The Glass Bead Game',
-        'progress': '33%',
-        'readingStrategy': 'Dreamy',
-        'notes': 'Fascinating',
-      };
-      final withCr = jsonEncode(brain);
-
-      const response = '''
-Congratulations on finishing! What a journey.
-
-BEGIN_JSON_APPEND_BOOK
-{
-  "title": "The Glass Bead Game",
-  "status": "Finished",
-  "rating": 4.5,
-  "personalSignificance": "Sushi",
-  "whyItMatters": "A monumental exploration of intellectual synthesis.",
-  "hardcoverReview": "Hesse at his most ambitious.",
-  "hardcoverSpoiler": false
-}
-END_JSON_APPEND_BOOK
-
-BEGIN_JSON_PATCH
-{
-  "reason": "User finished the book",
-  "evidence": "FINISH SIGNAL",
-  "confidence": 1.0,
-  "targetSection": "CURRENT_READING",
-  "replacementContent": null
-}
-END_JSON_PATCH
-''';
-
-      final parsed = BrainParser.parse(response);
-      expect(parsed.prose, contains('Congratulations'));
-      expect(parsed.blocks.length, 2);
-
-      final result = BrainParser.applyBlocks(withCr, parsed.blocks);
-      final updated = jsonDecode(result.brain) as Map<String, dynamic>;
-
-      expect(updated['currentReading'], isNull);
-
-      final books = updated['books'] as List;
-      expect(books.length, 1);
-      expect(books[0]['title'], 'The Glass Bead Game');
-      expect(books[0]['status'], 'Finished');
-      expect(books[0]['rating'], 4.5);
-      expect(books[0]['personalSignificance'], 'Sushi');
-      expect(books[0]['hardcoverReview'], 'Hesse at his most ambitious.');
-      // BUG: false is omitted from JSON (Book.toJson only writes when true)
-      expect(books[0].containsKey('hardcoverSpoiler'), isFalse);
-    });
-
+  group('hardcoverReview and hardcoverSpoiler', () {
     test('hardcoverReview and hardcoverSpoiler are preserved in toJson', () {
       final book = Book(
         title: 'Test',

@@ -13,9 +13,11 @@ import 'package:a_strange_loop/widgets/animations.dart';
 import 'package:a_strange_loop/services/hardcover_service.dart';
 import 'package:a_strange_loop/services/sync_service.dart';
 import 'package:a_strange_loop/services/firestore_service.dart';
+import 'package:a_strange_loop/services/app_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppConfig().load();
 
   try {
     await Firebase.initializeApp(options: firebaseOptions);
@@ -24,7 +26,16 @@ void main() async {
     return;
   }
 
-  final chatState = ChatState();
+  final firestoreService = FirestoreService(
+    collectionPrefix: AppConfig().isQaMode ? '_qa' : '',
+  );
+  final hardcoverService = HardcoverService(
+    apiKey: AppConfig().hardcoverApiKey,
+    userId: AppConfig().hardcoverUserId,
+    apiEndpoint: AppConfig().hardcoverEndpoint,
+  );
+
+  final chatState = ChatState(firestore: firestoreService);
   try {
     await chatState.seedBrainIfNeeded();
   } catch (e) {
@@ -32,18 +43,17 @@ void main() async {
     print('Seed skipped (brain may already exist): $e');
   }
 
-  final hardcoverService = HardcoverService();
-  final syncService = SyncService(
-    firestore: FirestoreService(),
-    hardcover: hardcoverService,
-  );
   chatState.initServices(
     hardcoverService: hardcoverService,
-    syncService: syncService,
+    syncService: SyncService(
+      firestore: firestoreService,
+      hardcover: hardcoverService,
+      collectionPrefix: AppConfig().isQaMode ? '_qa' : '',
+    ),
   );
 
-  unawaited(syncService.startupReconcile().whenComplete(() {
-    syncService.startPeriodicSync();
+  unawaited(chatState.sync.startupReconcile().whenComplete(() {
+    chatState.sync.startPeriodicSync();
   }));
 
   runApp(ASLApp(chatState: chatState));

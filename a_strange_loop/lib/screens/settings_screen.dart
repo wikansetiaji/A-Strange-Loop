@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
 import 'package:provider/provider.dart';
 import 'package:a_strange_loop/providers/chat_state.dart';
 import 'package:a_strange_loop/models/model_settings.dart';
+import 'package:a_strange_loop/services/app_config.dart';
 import 'package:a_strange_loop/theme/app_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -299,6 +300,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           horizontal: 16, vertical: 12),
                     ),
                   ),
+                ),
+              ],
+              if (kDebugMode) ...[
+                const SizedBox(height: 32),
+                Divider(color: cs.outline),
+                const SizedBox(height: 16),
+                Text(
+                  'QA Mode',
+                  style: AppTextStyles.display(context).copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: cs.error,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Toggle to use separate Firestore collections (meta_qa/sessions_qa) '
+                  'and separate Hardcover credentials. Sessions will reload.',
+                  style: AppTextStyles.chatBody(context).copyWith(
+                    color: cs.onSurface.withAlpha(160),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  title: Text(
+                    'QA Mode',
+                    style: AppTextStyles.chatBody(context).copyWith(
+                      color: cs.onSurface,
+                      fontSize: 13,
+                    ),
+                  ),
+                  value: AppConfig().isQaMode,
+                  activeColor: cs.error,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (v) async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        backgroundColor: cs.surface,
+                        title: Text(
+                          v ? 'Enable QA Mode?' : 'Disable QA Mode?',
+                          style: AppTextStyles.chatBody(context)
+                              .copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        content: Text(
+                          'Sessions will reload and you\'ll switch to '
+                          '${v ? 'qa' : 'production'} collections.',
+                          style: AppTextStyles.chatBody(context),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(true),
+                            child: Text(
+                              v ? 'Enable QA' : 'Disable QA',
+                              style: TextStyle(color: cs.error),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      await AppConfig().setQaMode(v);
+                      if (context.mounted) {
+                        await context.read<ChatState>().reloadWithQaMode();
+                      }
+                    }
+                  },
                 ),
               ],
             ],

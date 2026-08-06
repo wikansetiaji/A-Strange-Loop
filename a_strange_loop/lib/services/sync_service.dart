@@ -13,17 +13,22 @@ class SyncService {
   final FirestoreService _firestore;
   final HardcoverService _hardcover;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final String _collPrefix;
   Timer? _periodicTimer;
   StreamSubscription? _queueListener;
 
   int _syncPendingCount = 0;
   int get syncPendingCount => _syncPendingCount;
 
+  String get _meta => 'meta$_collPrefix';
+
   SyncService({
     required FirestoreService firestore,
     required HardcoverService hardcover,
+    String collectionPrefix = '',
   })  : _firestore = firestore,
-        _hardcover = hardcover;
+        _hardcover = hardcover,
+        _collPrefix = collectionPrefix;
 
   Future<void> startupReconcile() async {
     try {
@@ -184,7 +189,7 @@ class SyncService {
       const Duration(minutes: 5),
       (_) => drainSyncQueue(),
     );
-    _queueListener = _db.collection('meta').doc('sync_queue').snapshots().listen((_) {
+    _queueListener = _db.collection(_meta).doc('sync_queue').snapshots().listen((_) {
       drainSyncQueue();
     });
   }
@@ -192,7 +197,7 @@ class SyncService {
   Future<void> drainSyncQueue() async {
     try {
       final snapshot = await _db
-          .collection('meta')
+          .collection(_meta)
           .doc('sync_queue')
           .collection('items')
           .where('status', isEqualTo: 'pending')
@@ -229,7 +234,7 @@ class SyncService {
       }
 
       final pendingSnapshot = await _db
-          .collection('meta')
+          .collection(_meta)
           .doc('sync_queue')
           .collection('items')
           .where('status', isEqualTo: 'pending')
@@ -396,7 +401,10 @@ class SyncService {
                   previousBrain?.currentReading?.book;
               if (prevBook != null && prevBook.isNotEmpty) {
                 final isAbandoned =
-                    abandonedTitles.contains(_normalize(prevBook));
+                    abandonedTitles.contains(_normalize(prevBook)) ||
+                    previousBrain?.books.any((b) =>
+                        _normalize(b.title) == _normalize(prevBook) &&
+                        b.status == 'Abandoned') == true;
                 _enqueueItem(SyncQueueItem(
                   action: 'upsert_user_book',
                   payload: {
@@ -458,7 +466,7 @@ class SyncService {
 
   void _enqueueItem(SyncQueueItem item) {
     _db
-        .collection('meta')
+        .collection(_meta)
         .doc('sync_queue')
         .collection('items')
         .add(item.toMap());

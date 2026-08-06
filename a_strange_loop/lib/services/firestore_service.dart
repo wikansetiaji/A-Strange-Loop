@@ -8,19 +8,26 @@ import 'package:a_strange_loop/services/brain_parser.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final String _collPrefix;
+
+  FirestoreService({String collectionPrefix = ''})
+      : _collPrefix = collectionPrefix;
+
+  String get _meta => 'meta$_collPrefix';
+  String get _sessions => 'sessions$_collPrefix';
 
   Future<String> getBrain() async {
     final doc =
-        await _firestore.collection('meta').doc('brain_json').get();
+        await _firestore.collection(_meta).doc('brain_json').get();
     if (!doc.exists) {
-      throw Exception('Brain document not found at meta/brain_json');
+      throw Exception('Brain document not found at $_meta/brain_json');
     }
     return doc.data()?['content'] ?? '';
   }
 
   Future<void> uploadBrain(String jsonContent) async {
     final bookCount = _countBooks(jsonContent);
-    await _firestore.collection('meta').doc('brain_json').set({
+    await _firestore.collection(_meta).doc('brain_json').set({
       'content': jsonContent,
       'updated_at': FieldValue.serverTimestamp(),
       'book_count': bookCount,
@@ -39,7 +46,7 @@ class FirestoreService {
 
   Future<void> updateBrain(
       String jsonContent, List<PatchLogEntry> patchLog) async {
-    final brainRef = _firestore.collection('meta').doc('brain_json');
+    final brainRef = _firestore.collection(_meta).doc('brain_json');
     final batch = _firestore.batch();
 
     batch.set(brainRef, {
@@ -62,14 +69,14 @@ class FirestoreService {
   // ── Session CRUD ──────────────────────────────────────────────
 
   Future<void> createSession(Session session) async {
-    await _firestore.collection('sessions').doc(session.id).set(
+    await _firestore.collection(_sessions).doc(session.id).set(
           session.toMap(),
         );
   }
 
   Future<List<Session>> loadSessions() async {
     final snapshot = await _firestore
-        .collection('sessions')
+        .collection(_sessions)
         .orderBy('updated_at', descending: true)
         .get();
     final sessions = snapshot.docs
@@ -84,13 +91,13 @@ class FirestoreService {
 
   Future<void> updateSessionMeta(
       String sessionId, Map<String, dynamic> data) async {
-    await _firestore.collection('sessions').doc(sessionId).set(data,
+    await _firestore.collection(_sessions).doc(sessionId).set(data,
         SetOptions(merge: true));
   }
 
   Future<void> deleteSession(String sessionId) async {
     final messagesSnapshot = await _firestore
-        .collection('sessions')
+        .collection(_sessions)
         .doc(sessionId)
         .collection('messages')
         .get();
@@ -98,7 +105,7 @@ class FirestoreService {
     for (final doc in messagesSnapshot.docs) {
       batch.delete(doc.reference);
     }
-    batch.delete(_firestore.collection('sessions').doc(sessionId));
+    batch.delete(_firestore.collection(_sessions).doc(sessionId));
     await batch.commit();
   }
 
@@ -106,7 +113,7 @@ class FirestoreService {
 
   Future<List<Message>> loadMessages(String sessionId) async {
     final snapshot = await _firestore
-        .collection('sessions')
+        .collection(_sessions)
         .doc(sessionId)
         .collection('messages')
         .orderBy('order')
@@ -118,7 +125,7 @@ class FirestoreService {
 
   Future<String> saveMessage(String sessionId, Message message) async {
     final docRef = await _firestore
-        .collection('sessions')
+        .collection(_sessions)
         .doc(sessionId)
         .collection('messages')
         .add(message.toMap());
@@ -128,7 +135,7 @@ class FirestoreService {
   Future<void> updateMessageContent(
       String sessionId, String firestoreId, String newContent) async {
     await _firestore
-        .collection('sessions')
+        .collection(_sessions)
         .doc(sessionId)
         .collection('messages')
         .doc(firestoreId)
@@ -141,7 +148,7 @@ class FirestoreService {
   Future<void> deleteMessagesAfterOrder(
       String sessionId, int afterOrder) async {
     final snapshot = await _firestore
-        .collection('sessions')
+        .collection(_sessions)
         .doc(sessionId)
         .collection('messages')
         .where('order', isGreaterThan: afterOrder)
@@ -158,7 +165,7 @@ class FirestoreService {
 
   Future<List<Session>> searchSessionsByTitle(String query) async {
     final snapshot = await _firestore
-        .collection('sessions')
+        .collection(_sessions)
         .orderBy('title')
         .startAt([query])
         .endAt(['$query\uf8ff'])
@@ -180,13 +187,13 @@ class FirestoreService {
   // ── Model Settings ───────────────────────────────────────────
 
   Future<ModelSettings> getModelSettings() async {
-    final doc = await _firestore.collection('meta').doc('model_settings').get();
+    final doc = await _firestore.collection(_meta).doc('model_settings').get();
     if (!doc.exists) return const ModelSettings();
     return ModelSettings.fromJson(doc.data()!);
   }
 
   Future<void> saveModelSettings(ModelSettings settings) async {
-    await _firestore.collection('meta').doc('model_settings').set(
+    await _firestore.collection(_meta).doc('model_settings').set(
           settings.toJson(),
           SetOptions(merge: true),
         );
