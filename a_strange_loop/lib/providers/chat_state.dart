@@ -33,6 +33,8 @@ class ChatState extends ChangeNotifier {
 
   int sessionPromptTokens = 0;
   int sessionCompletionTokens = 0;
+  int sessionCacheHitTokens = 0;
+  int sessionCacheMissTokens = 0;
 
   String? _conversationSummary;
   int _lastSummarizedIndex = 0;
@@ -112,6 +114,8 @@ class ChatState extends ChangeNotifier {
     _lastSummarizedIndex = 0;
     sessionPromptTokens = 0;
     sessionCompletionTokens = 0;
+    sessionCacheHitTokens = 0;
+    sessionCacheMissTokens = 0;
     notifyListeners();
 
     try {
@@ -195,6 +199,8 @@ class ChatState extends ChangeNotifier {
     messages = messagesDocs;
     sessionPromptTokens = target.promptTokens;
     sessionCompletionTokens = target.completionTokens;
+    sessionCacheHitTokens = 0;
+    sessionCacheMissTokens = 0;
     _conversationSummary = target.conversationSummary;
     _lastSummarizedIndex = target.lastSummarizedIndex;
     streamingContent = null;
@@ -413,6 +419,8 @@ class ChatState extends ChangeNotifier {
           if (event.promptTokens != null) {
             sessionPromptTokens += event.promptTokens!;
             sessionCompletionTokens += event.completionTokens ?? 0;
+            sessionCacheHitTokens += event.cacheHitTokens ?? 0;
+            sessionCacheMissTokens += event.cacheMissTokens ?? 0;
           } else if (event.reasoningContent != null) {
             streamingThinking =
                 (streamingThinking ?? '') + event.reasoningContent!;
@@ -905,10 +913,18 @@ class ChatState extends ChangeNotifier {
 
   String get formattedSessionTokens {
     final total = sessionPromptTokens + sessionCompletionTokens;
-    if (total >= 1000) {
-      return '${(total / 1000).toStringAsFixed(1)}K tokens this session';
+    final cache = sessionCacheHitTokens + sessionCacheMissTokens;
+    final totalStr =
+        total >= 1000 ? '${(total / 1000).toStringAsFixed(1)}K' : '$total';
+    if (cache <= 0 || sessionCacheHitTokens <= 0) {
+      return '$totalStr tokens this session';
     }
-    return '$total tokens this session';
+    final pct =
+        (sessionCacheHitTokens / cache * 100).clamp(0, 100).toStringAsFixed(0);
+    final hitStr = sessionCacheHitTokens >= 1000
+        ? (sessionCacheHitTokens / 1000).toStringAsFixed(1)
+        : sessionCacheHitTokens.toString();
+    return '$totalStr tokens this session \u00b7 ${hitStr}K cached ($pct%)';
   }
 
   void clearError() {
@@ -965,6 +981,8 @@ class ChatState extends ChangeNotifier {
     messages = [];
     sessionPromptTokens = 0;
     sessionCompletionTokens = 0;
+    sessionCacheHitTokens = 0;
+    sessionCacheMissTokens = 0;
     _conversationSummary = null;
     _lastSummarizedIndex = 0;
     streamingContent = null;

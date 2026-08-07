@@ -11,6 +11,8 @@ class TextChunk {
   final int? promptTokens;
   final int? completionTokens;
   final int? totalTokens;
+  final int? cacheHitTokens;
+  final int? cacheMissTokens;
 
   const TextChunk({
     required this.content,
@@ -19,6 +21,8 @@ class TextChunk {
     this.promptTokens,
     this.completionTokens,
     this.totalTokens,
+    this.cacheHitTokens,
+    this.cacheMissTokens,
   });
 }
 
@@ -311,6 +315,8 @@ class AIService {
             promptTokens: usage['prompt_tokens'] as int? ?? 0,
             completionTokens: usage['completion_tokens'] as int? ?? 0,
             totalTokens: usage['total_tokens'] as int? ?? 0,
+            cacheHitTokens: usage['prompt_cache_hit_tokens'] as int? ?? 0,
+            cacheMissTokens: usage['prompt_cache_miss_tokens'] as int? ?? 0,
           );
         }
       } catch (_) {
