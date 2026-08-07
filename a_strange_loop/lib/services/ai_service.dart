@@ -45,10 +45,12 @@ class AIService {
 
   String _model;
   Map<String, dynamic> _thinking;
+  String? _reasoningEffort;
 
   AIService({String? model, String? thinkingEffort})
       : _model = model ?? ModelSettings.defaultModel,
-        _thinking = _buildThinkingParam(thinkingEffort ?? ModelSettings.defaultThinking);
+        _thinking = _buildThinkingParam(thinkingEffort ?? ModelSettings.defaultThinking),
+        _reasoningEffort = _buildEffort(thinkingEffort ?? ModelSettings.defaultThinking);
 
   String get model => _model;
   Map<String, dynamic> get thinking => _thinking;
@@ -56,11 +58,17 @@ class AIService {
   void updateSettings(String model, String thinkingEffort) {
     _model = model;
     _thinking = _buildThinkingParam(thinkingEffort);
+    _reasoningEffort = _buildEffort(thinkingEffort);
   }
 
   static Map<String, dynamic> _buildThinkingParam(String effort) {
     if (effort == 'disabled') return {'type': 'disabled'};
     return {'type': 'enabled'};
+  }
+
+  static String? _buildEffort(String effort) {
+    if (effort == 'disabled') return null;
+    return effort;
   }
 
   static const _thinkingDisabled = {'type': 'disabled'};
@@ -91,6 +99,7 @@ class AIService {
       'max_tokens': 2048,
       'stream': false,
       'thinking': _thinking,
+      if (_reasoningEffort != null) 'reasoning_effort': _reasoningEffort,
     });
 
     final response = await _client.send(request);
@@ -166,6 +175,7 @@ class AIService {
       'max_tokens': 4096,
       'stream': true,
       'thinking': _thinking,
+      if (_reasoningEffort != null) 'reasoning_effort': _reasoningEffort,
     });
 
     final response = await _client.send(request);
@@ -225,6 +235,7 @@ class AIService {
       'max_tokens': 8192,
       'stream': true,
       'thinking': _thinking,
+      if (_reasoningEffort != null) 'reasoning_effort': _reasoningEffort,
     };
     if (tools != null && tools.isNotEmpty) {
       body['tools'] = tools;
