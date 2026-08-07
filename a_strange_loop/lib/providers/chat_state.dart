@@ -199,8 +199,8 @@ class ChatState extends ChangeNotifier {
     messages = messagesDocs;
     sessionPromptTokens = target.promptTokens;
     sessionCompletionTokens = target.completionTokens;
-    sessionCacheHitTokens = 0;
-    sessionCacheMissTokens = 0;
+    sessionCacheHitTokens = target.cacheHitTokens;
+    sessionCacheMissTokens = target.cacheMissTokens;
     _conversationSummary = target.conversationSummary;
     _lastSummarizedIndex = target.lastSummarizedIndex;
     streamingContent = null;
@@ -964,6 +964,8 @@ class ChatState extends ChangeNotifier {
       updatedAt: DateTime.now(),
       promptTokens: sessionPromptTokens,
       completionTokens: sessionCompletionTokens,
+      cacheHitTokens: sessionCacheHitTokens,
+      cacheMissTokens: sessionCacheMissTokens,
       messageCount: realMessages.length,
       conversationSummary: _conversationSummary,
       lastSummarizedIndex: _lastSummarizedIndex,
