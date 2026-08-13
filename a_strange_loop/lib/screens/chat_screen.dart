@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:a_strange_loop/providers/chat_state.dart';
 import 'package:a_strange_loop/models/message.dart';
 import 'package:a_strange_loop/widgets/sidebar.dart';
@@ -35,6 +36,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final FocusNode _editFocusNode = FocusNode();
 
   bool _thinkingExpanded = true;
+  final Set<int> _expandedSearchOrders = {};
 
   static List<_DisplayItem> _buildDisplayItems(ChatState state) {
     final items = <_DisplayItem>[];
@@ -414,6 +416,8 @@ class _ChatScreenState extends State<ChatScreen> {
         case 'searchDone':
           icon = Icons.check_circle_outline;
           text = 'Search done on "${data['q'] ?? ''}"';
+        case 'webSearchDone':
+          return _buildWebSearchSources(msg);
         case 'brainUpdated':
           icon = Icons.auto_awesome;
           text = 'Brain updated';
@@ -443,6 +447,212 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildWebSearchSources(Message msg) {
+    final cs = Theme.of(context).colorScheme;
+    final Map<String, dynamic> data;
+    try {
+      data = jsonDecode(msg.content) as Map<String, dynamic>;
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
+    final query = data['q'] as String? ?? '';
+    final sources = _extractSources(data['results']);
+    if (sources.isEmpty) return const SizedBox.shrink();
+
+    final expanded = _expandedSearchOrders.contains(msg.order);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                if (expanded) {
+                  _expandedSearchOrders.remove(msg.order);
+                } else {
+                  _expandedSearchOrders.add(msg.order);
+                }
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Icon(Icons.travel_explore, size: 12,
+                      color: cs.onSurface.withAlpha(100)),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'Web search \u00b7 $query',
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.chatCaption(context).copyWith(
+                        color: cs.onSurface.withAlpha(100),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${sources.length} sources',
+                    style: AppTextStyles.chatCaption(context).copyWith(
+                      fontSize: 10,
+                      color: cs.primary.withAlpha(160),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 14,
+                    color: cs.onSurface.withAlpha(100),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (expanded) ...[
+            const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                border: Border.all(color: cs.outline.withAlpha(120), width: 1),
+              ),
+              child: Column(
+                children: [
+                  for (var i = 0; i < sources.length; i++) ...[
+                    if (i > 0)
+                      Divider(height: 1, color: cs.outline.withAlpha(80)),
+                    _buildSourceRow(sources[i], cs),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _extractSources(dynamic raw) {
+    final sources = <Map<String, dynamic>>[];
+    if (raw is List) {
+      for (final r in raw) {
+        if (r is! Map<String, dynamic>) continue;
+        final highlights = (r['highlights'] as List? ?? [])
+            .whereType<String>()
+            .toList();
+        sources.add({
+          'title': r['title'] ?? '',
+          'url': r['url'] ?? '',
+          'snippet': highlights.isNotEmpty ? highlights.first : null,
+        });
+      }
+    } else if (raw is Map) {
+      final citations = (raw['citations'] as List? ?? []);
+      for (final c in citations) {
+        if (c is! Map<String, dynamic>) continue;
+        sources.add({
+          'title': c['title'] ?? '',
+          'url': c['url'] ?? '',
+          'snippet': null,
+        });
+      }
+      if (sources.isEmpty) {
+        final fallback = (raw['sources'] as List? ?? []);
+        for (final s in fallback) {
+          if (s is! Map<String, dynamic>) continue;
+          sources.add({
+            'title': s['title'] ?? '',
+            'url': s['url'] ?? '',
+            'snippet': s['summary'] as String?,
+          });
+        }
+      }
+    }
+    return sources;
+  }
+
+  Widget _buildSourceRow(Map<String, dynamic> source, ColorScheme cs) {
+    final title = (source['title'] as String? ?? '').trim();
+    final url = (source['url'] as String? ?? '').trim();
+    final snippet = source['snippet'] as String?;
+    final domain = _domainOf(url);
+
+    return InkWell(
+      onTap: url.isNotEmpty ? () => _openUrl(url) : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.language_outlined,
+                size: 13, color: cs.primary.withAlpha(180)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title.isEmpty ? domain : title,
+                    style: AppTextStyles.chatBody(context).copyWith(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      height: 1.3,
+                      color: cs.primary,
+                      decoration:
+                          url.isNotEmpty ? TextDecoration.underline : null,
+                      decorationColor: cs.primary.withAlpha(140),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (snippet != null && snippet.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      snippet,
+                      style: AppTextStyles.chatCaption(context).copyWith(
+                        fontSize: 11,
+                        height: 1.35,
+                        color: cs.onSurface.withAlpha(130),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  if (domain.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      domain,
+                      style: AppTextStyles.chatCaption(context).copyWith(
+                        fontSize: 10,
+                        color: cs.onSurface.withAlpha(90),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _domainOf(String url) {
+    try {
+      return Uri.parse(url).host.replaceFirst('www.', '');
+    } catch (_) {
+      return url;
+    }
+  }
+
+  void _openUrl(String url) {
+    launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
   Widget _buildEmptyState() {

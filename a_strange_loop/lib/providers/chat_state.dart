@@ -9,6 +9,7 @@ import 'package:a_strange_loop/services/firestore_service.dart';
 import 'package:a_strange_loop/services/ai_service.dart';
 import 'package:a_strange_loop/services/brain_parser.dart';
 import 'package:a_strange_loop/services/hardcover_service.dart';
+import 'package:a_strange_loop/services/exa_service.dart';
 import 'package:a_strange_loop/services/sync_service.dart';
 import 'package:a_strange_loop/services/app_config.dart';
 import 'package:a_strange_loop/constants/system_prompt.dart';
@@ -19,6 +20,7 @@ import 'package:a_strange_loop/models/model_settings.dart';
 class ChatState extends ChangeNotifier {
   FirestoreService _firestore;
   final AIService _ai = AIService();
+  final ExaService _exa = ExaService();
   late HardcoverService _hardcover;
   late SyncService _sync;
 
@@ -452,8 +454,13 @@ class ChatState extends ChangeNotifier {
 
         streamingThinking = null;
 
-        final hasBrainTools = toolRequests.any((tc) => tc.name != 'searchBooks');
-        streamingIndicator = hasBrainTools ? 'Updating brain...' : 'Searching Hardcover...';
+        final hasBrainTools = toolRequests.any(
+            (tc) => !const {'searchBooks', 'searchWeb'}.contains(tc.name));
+        streamingIndicator = hasBrainTools
+            ? 'Updating brain...'
+            : (toolRequests.any((tc) => tc.name == 'searchWeb')
+                ? 'Searching the web...'
+                : 'Searching Hardcover...');
         streamingContent = streamingIndicator;
         notifyListeners();
 
@@ -476,6 +483,9 @@ class ChatState extends ChangeNotifier {
           switch (tc.name) {
             case 'searchBooks':
               toolResult = await _handleSearchBooks(tc.arguments);
+              break;
+            case 'searchWeb':
+              toolResult = await _handleSearchWeb(tc.arguments);
               break;
             case 'appendBook':
               toolResult = await _handleAppendBook(tc.arguments);
@@ -597,6 +607,39 @@ class ChatState extends ChangeNotifier {
       messages.add(searchDoneMsg);
       _firestore.saveMessage(currentSessionId!, searchDoneMsg);
       return jsonEncode(minimalResults);
+    } catch (e) {
+      return jsonEncode({'error': e.toString()});
+    }
+  }
+
+  Future<String> _handleSearchWeb(Map<String, dynamic> args) async {
+    final query = args['query'] as String? ?? '';
+    final type = args['type'] as String? ?? 'auto';
+    final numResults = (args['numResults'] as num?)?.toInt() ?? 5;
+    final category = args['category'] as String?;
+    if (query.isEmpty) {
+      return jsonEncode({'error': 'query is required'});
+    }
+    try {
+      final result = await _exa.search(
+        query: query,
+        type: type,
+        numResults: numResults.clamp(1, 10),
+        category: category,
+      );
+      final searchDoneMsg = Message(
+        role: 'status',
+        content: jsonEncode({
+          't': 'webSearchDone',
+          'q': query,
+          'type': type,
+          'results': jsonDecode(result),
+        }),
+        order: messages.length,
+      );
+      messages.add(searchDoneMsg);
+      _firestore.saveMessage(currentSessionId!, searchDoneMsg);
+      return result;
     } catch (e) {
       return jsonEncode({'error': e.toString()});
     }

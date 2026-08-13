@@ -19,13 +19,14 @@ firebase deploy --only hosting   # deploy to Firebase Hosting
 - **Flutter web app** (SDK ^3.7.2). Firebase backend: Auth (Google sign-in, restricted to `wikansetiaji@gmail.com`), Firestore, Hosting.
 - **State management**: single `ChatState` ChangeNotifier via `provider`. Passed as `ChangeNotifierProvider.value` from `main.dart` (no `MultiProvider` needed).
 - **AI**: calls DeepSeek API (`deepseek-v4-flash`) directly via `http` package. Streaming support with tool calls in `ai_service.dart`.
+- **Web search (Exa)**: the `searchWeb` tool calls the Exa `/search` endpoint directly via `http` (`services/exa_service.dart`). `type: auto` returns top results with highlighted snippets; `type: deep` returns a synthesized cited answer. Results are shaped into small JSON fed back to DeepSeek as the tool result. The same shaped result is persisted as a `webSearchDone` status message (`{"t":"webSearchDone","q":...,"type":...,"results":...}`) in the session so sources survive reloads; `chat_screen.dart` renders them as tappable source cards (title, snippet, domain — opens in a new tab via `url_launcher`). Exa key lives in `constants/api_config.dart` (same personal-app treatment as the DeepSeek key).
 - **Hardcover proxy**: a Cloudflare Worker at `workers/index.js` proxies GraphQL calls to `api.hardcover.app/v1/graphql`, adding CORS headers. The Flutter app talks to the worker.
 
 ## Core concept — "Reading Brain"
 The app is a reading-companion chatbot. The AI operates against a structured JSON file called the "Reading Brain" stored in Firestore (`meta/brain_json`) and seeded from `assets/reading_brain.json`. The original markdown brain is kept at `meta/brain` as a backup.
 - The **brain model** (`models/brain.dart`) defines typed Dart classes with `fromJson`/`toJson`/`toMarkdown()`.
-- The **system prompt** (`constants/system_prompt.dart`) defines the AI's personality and write triggers (~395 lines). It describes six tools conceptually — the actual JSON schemas live in `brain_tools.dart`.
-- The **brain tools** (`constants/brain_tools.dart`) defines six OpenAI-style function definitions (`searchBooks`, `appendBook`, `updateBook`, `deleteBook`, `patchBrain`, `logObservation`) sent as the `tools` parameter to the DeepSeek API. The AI calls these via the standard function-calling protocol.
+- The **system prompt** (`constants/system_prompt.dart`) defines the AI's personality and write triggers (~395 lines). It describes seven tools conceptually — the actual JSON schemas live in `brain_tools.dart`.
+- The **brain tools** (`constants/brain_tools.dart`) defines seven OpenAI-style function definitions (`searchBooks`, `searchWeb`, `appendBook`, `updateBook`, `deleteBook`, `patchBrain`, `logObservation`) sent as the `tools` parameter to the DeepSeek API. The AI calls these via the standard function-calling protocol.
 - The **brain parser** (`services/brain_parser.dart`) provides discrete mutation methods (`appendBook`, `updateBook`, `deleteBook`, `patchBrain`, `addObservation`, `applyBlocks`) that operate on a brain JSON string. It no longer parses AI responses — tool calls are handled directly by `chat_state.dart`.
 - Any change to `system_prompt.dart`, `brain_tools.dart`, or `brain_parser.dart` must keep them consistent — tool schemas, prompt descriptions, and parser methods must agree on field names and semantics.
 
@@ -38,7 +39,7 @@ The app syncs reading activity to Hardcover.app via a two-way system:
 - Rating resolution: `book.rating` is the brain's rating (source of truth). `book.hardcoverRating` is Hardcover's snapshot. `Book._resolveRating` prefers hardcoverRating when both exist and differ.
 
 ## Secrets (do not modify carelessly)
-- `constants/api_config.dart` contains a **hardcoded DeepSeek API key**. This is intentional for a personal app but must never be exposed or committed to other repos.
+- `constants/api_config.dart` contains a **hardcoded DeepSeek API key** and an **Exa API key**. This is intentional for a personal app but must never be exposed or committed to other repos.
 - `constants/hardcover_config.dart` contains a **hardcoded Hardcover JWT** and user ID. Same treatment — never commit to other repos.
 - `constants/hardcover_config_qa.dart` contains QA-mode Hardcover credentials. Same treatment.
 - `lib/firebase_options.dart` contains Firebase web credentials (expected for a web app).
@@ -63,11 +64,12 @@ A debug-only toggle in Settings switches between production and QA environments:
 | `lib/services/brain_parser.dart` | Discrete brain mutation methods (appendBook, updateBook, etc.) — operates on brain JSON, not AI responses |
 | `lib/services/firestore_service.dart` | All Firestore CRUD (brain_json, sessions, messages) — supports QA collection prefix |
 | `lib/services/hardcover_service.dart` | Hardcover GraphQL client: search, fetch, upsert, create — configurable credentials |
+| `lib/services/exa_service.dart` | Exa web search client: `/search` via http — shapes auto highlights / deep cited answers into tool-result JSON |
 | `lib/services/sync_service.dart` | Two-way Hardcover sync: startup reconcile, queue drain, brain mutation → sync queue |
 | `lib/services/app_config.dart` | QA/production mode singleton (shared_preferences), collection prefixes, credential selection |
 | `lib/constants/system_prompt.dart` | Full AI system prompt (~395 lines) — tool concepts and write triggers |
-| `lib/constants/brain_tools.dart` | Six OpenAI-style tool/function definitions for the DeepSeek API |
-| `lib/constants/api_config.dart` | DeepSeek endpoint, model, API key, token limits |
+| `lib/constants/brain_tools.dart` | Seven OpenAI-style tool/function definitions for the DeepSeek API |
+| `lib/constants/api_config.dart` | DeepSeek endpoint, model, API key, token limits; Exa endpoint + API key |
 | `lib/constants/hardcover_config.dart` | Hardcover proxy endpoint, API JWT, user ID |
 | `lib/constants/hardcover_config_qa.dart` | QA Hardcover credentials |
 | `lib/theme/app_theme.dart` | Light/dark themes using Space Grotesk (body) + Syne (display) |

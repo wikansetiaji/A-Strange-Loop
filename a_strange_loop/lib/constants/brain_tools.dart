@@ -1,6 +1,7 @@
 class BrainTools {
   static List<Map<String, dynamic>> get all => [
         searchBooks,
+        searchWeb,
         appendBook,
         updateBook,
         deleteBook,
@@ -27,6 +28,50 @@ class BrainTools {
           },
         },
         'required': ['query'],
+      },
+    },
+  };
+
+  static const searchWeb = {
+    'type': 'function',
+    'function': {
+      'name': 'searchWeb',
+      'description':
+          'Search the open web. Use this for anything that is NOT a '
+              'book-metadata lookup: current events, author news, essays, '
+              'criticism, scholarly work, or general knowledge. For book '
+              'titles, metadata, or reviews, use searchBooks instead.',
+      'parameters': {
+        'type': 'object',
+        'properties': {
+          'query': {
+            'type': 'string',
+            'description': 'The web search query',
+          },
+          'type': {
+            'type': 'string',
+            'enum': ['auto', 'deep'],
+            'description':
+                "'auto': fast search returning top results with highlighted "
+                    'snippets. Use for quick facts, links, or scanning sources. '
+                    "'deep': multi-step research returning a synthesized, cited "
+                    'answer. Use for open-ended questions, "summarize X", or '
+                    '"what is the current state of Y".',
+          },
+          'numResults': {
+            'type': 'integer',
+            'description': 'Number of results to return, 1-10. Default 5.',
+          },
+          'category': {
+            'type': 'string',
+            'enum': ['news', 'publication', 'company', 'people'],
+            'description':
+                'Optional bias toward result types. "news" for current '
+                    'events, "publication" for scholarly/research content, '
+                    '"company" for company pages, "people" for people profiles.',
+          },
+        },
+        'required': ['query', 'type'],
       },
     },
   };
