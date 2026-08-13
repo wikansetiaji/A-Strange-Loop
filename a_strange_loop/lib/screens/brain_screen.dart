@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
-import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:a_strange_loop/providers/chat_state.dart';
+import 'package:a_strange_loop/constants/hardcover_config.dart';
 import 'package:a_strange_loop/models/brain.dart';
 import 'package:a_strange_loop/theme/app_theme.dart';
 import 'package:a_strange_loop/widgets/animations.dart';
@@ -765,16 +763,28 @@ class _BrainScreenState extends State<BrainScreen> {
   }
 
   Widget _coverImage(String url) {
-    final viewId = 'cover-${url.hashCode}';
-    ui_web.platformViewRegistry.registerViewFactory(viewId, (int _) {
-      final img = html.ImageElement()
-        ..src = url
-        ..style.width = '100%'
-        ..style.height = '100%'
-        ..style.objectFit = 'cover';
-      return img;
-    });
-    return HtmlElementView(viewType: viewId);
+    final proxied = '$hardcoverImageProxyBase${Uri.encodeComponent(url)}';
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Image.network(
+        proxied,
+        width: 60,
+        height: 90,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _coverPlaceholder(context),
+      ),
+    );
+  }
+
+  Widget _coverPlaceholder(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: 60,
+      height: 90,
+      color: cs.surfaceContainerHighest,
+      alignment: Alignment.center,
+      child: Icon(Icons.menu_book, size: 20, color: cs.onSurfaceVariant),
+    );
   }
 
   double? _progressFraction(String progress) {
