@@ -65,6 +65,20 @@ class AIService {
     _reasoningEffort = _buildEffort(thinkingEffort);
   }
 
+  String get _endpoint =>
+      _isMimo ? mimoApiEndpoint : deepseekApiEndpoint;
+
+  Map<String, String> get _authHeaders => _isMimo
+      ? {'Content-Type': 'application/json', 'api-key': mimoApiKey}
+      : {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $deepseekApiKey'
+        };
+
+  String get _tokenParam => _isMimo ? 'max_completion_tokens' : 'max_tokens';
+
+  bool get _isMimo => ModelSettings.isMimoModel(_model);
+
   static Map<String, dynamic> _buildThinkingParam(String effort) {
     if (effort == 'disabled') return {'type': 'disabled'};
     return {'type': 'enabled'};
@@ -78,11 +92,8 @@ class AIService {
   static const _thinkingDisabled = {'type': 'disabled'};
 
   Future<String> summarize(String textToSummarize) async {
-    final request = http.Request('POST', Uri.parse(deepseekApiEndpoint));
-    request.headers.addAll({
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $deepseekApiKey',
-    });
+    final request = http.Request('POST', Uri.parse(_endpoint));
+    request.headers.addAll(_authHeaders);
     request.body = jsonEncode({
       'model': _model,
       'messages': [
@@ -100,10 +111,11 @@ class AIService {
         {'role': 'user', 'content': textToSummarize},
       ],
       'temperature': 0.3,
-      'max_tokens': 2048,
+      _tokenParam: 2048,
       'stream': false,
       'thinking': _thinking,
-      if (_reasoningEffort != null) 'reasoning_effort': _reasoningEffort,
+      if (!_isMimo && _reasoningEffort != null)
+        'reasoning_effort': _reasoningEffort,
     });
 
     final response = await _client.send(request);
@@ -121,11 +133,8 @@ class AIService {
   Future<String?> generateTitle(
       String firstUserMsg, String firstAssistantMsg) async {
     try {
-      final request = http.Request('POST', Uri.parse(deepseekApiEndpoint));
-      request.headers.addAll({
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $deepseekApiKey',
-      });
+      final request = http.Request('POST', Uri.parse(_endpoint));
+      request.headers.addAll(_authHeaders);
       request.body = jsonEncode({
         'model': _model,
         'messages': [
@@ -140,7 +149,7 @@ class AIService {
             'content': 'User: $firstUserMsg\n\nAssistant: $firstAssistantMsg',
           },
         ],
-        'max_tokens': 64,
+        _tokenParam: 64,
         'temperature': 0.3,
         'stream': false,
         'thinking': _thinkingDisabled,
@@ -165,21 +174,19 @@ class AIService {
   }
 
   Stream<String> sendMessageStream(String prompt) async* {
-    final request = http.Request('POST', Uri.parse(deepseekApiEndpoint));
-    request.headers.addAll({
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $deepseekApiKey',
-    });
+    final request = http.Request('POST', Uri.parse(_endpoint));
+    request.headers.addAll(_authHeaders);
     request.body = jsonEncode({
       'model': _model,
       'messages': [
         {'role': 'user', 'content': prompt},
       ],
       'temperature': 0.7,
-      'max_tokens': 4096,
+      _tokenParam: 4096,
       'stream': true,
       'thinking': _thinking,
-      if (_reasoningEffort != null) 'reasoning_effort': _reasoningEffort,
+      if (!_isMimo && _reasoningEffort != null)
+        'reasoning_effort': _reasoningEffort,
     });
 
     final response = await _client.send(request);
@@ -226,20 +233,18 @@ class AIService {
     List<Map<String, dynamic>> messages, {
     List<Map<String, dynamic>>? tools,
   }) async* {
-    final request = http.Request('POST', Uri.parse(deepseekApiEndpoint));
-    request.headers.addAll({
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $deepseekApiKey',
-    });
+    final request = http.Request('POST', Uri.parse(_endpoint));
+    request.headers.addAll(_authHeaders);
 
     final body = <String, dynamic>{
       'model': _model,
       'messages': messages,
       'temperature': 0.7,
-      'max_tokens': 8192,
+      _tokenParam: 8192,
       'stream': true,
       'thinking': _thinking,
-      if (_reasoningEffort != null) 'reasoning_effort': _reasoningEffort,
+      if (!_isMimo && _reasoningEffort != null)
+        'reasoning_effort': _reasoningEffort,
     };
     if (tools != null && tools.isNotEmpty) {
       body['tools'] = tools;

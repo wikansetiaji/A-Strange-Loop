@@ -2,11 +2,18 @@ class ModelSettings {
   final String model;
   final String thinkingEffort;
 
-  static const defaultModel = 'deepseek-v4-flash';
+  static const defaultModel = 'mimo-v2.5';
   static const defaultThinking = 'low';
 
-  static const modelOptions = ['deepseek-v4-flash', 'deepseek-v4-pro'];
+  static const modelOptions = [
+    'mimo-v2.5',
+    'mimo-v2.5-pro',
+    'deepseek-v4-flash',
+    'deepseek-v4-pro',
+  ];
   static const thinkingOptions = ['disabled', 'low', 'high', 'max'];
+
+  static bool isMimoModel(String model) => model.startsWith('mimo-');
 
   const ModelSettings({
     this.model = defaultModel,

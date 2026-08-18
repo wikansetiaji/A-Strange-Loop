@@ -211,9 +211,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 context: context,
                 value: _selectedModel,
                 items: ModelSettings.modelOptions,
-                labelBuilder: (v) => v == 'deepseek-v4-flash'
-                    ? 'DeepSeek V4 Flash (fast)'
-                    : 'DeepSeek V4 Pro (powerful)',
+                labelBuilder: (v) {
+                  switch (v) {
+                    case 'mimo-v2.5':
+                      return 'MiMo V2.5 (Xiaomi, fast)';
+                    case 'mimo-v2.5-pro':
+                      return 'MiMo V2.5 Pro (Xiaomi, powerful)';
+                    case 'deepseek-v4-flash':
+                      return 'DeepSeek V4 Flash (fast)';
+                    case 'deepseek-v4-pro':
+                      return 'DeepSeek V4 Pro (powerful)';
+                    default:
+                      return v;
+                  }
+                },
                 onChanged: (v) {
                   setState(() => _selectedModel = v);
                   _saveSettings();
