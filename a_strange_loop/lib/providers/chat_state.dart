@@ -410,6 +410,7 @@ class ChatState extends ChangeNotifier {
       String visibleBuffer = '';
       String streamingIndicator = '';
       final toolRequests = <ToolCallRequest>[];
+      String reasoningBuffer = '';
 
       await for (final event in _ai.sendMessageStreamWithTools(
         apiMessages,
@@ -426,6 +427,7 @@ class ChatState extends ChangeNotifier {
           } else if (event.reasoningContent != null) {
             streamingThinking =
                 (streamingThinking ?? '') + event.reasoningContent!;
+            reasoningBuffer += event.reasoningContent!;
             _throttledNotify();
           } else if (event.content.isNotEmpty) {
             final chunk = event.content;
@@ -467,6 +469,9 @@ class ChatState extends ChangeNotifier {
         final assistantMsg = <String, dynamic>{
           'role': 'assistant',
           'content': prose.isNotEmpty ? prose : null,
+          if (ModelSettings.isMimoModel(_ai.model) &&
+              reasoningBuffer.isNotEmpty)
+            'reasoning_content': reasoningBuffer,
           'tool_calls': toolRequests.map((tc) => {
             'id': tc.id,
             'type': 'function',
@@ -479,6 +484,9 @@ class ChatState extends ChangeNotifier {
         apiMessages.add(assistantMsg);
 
         for (final tc in toolRequests) {
+          debugPrint(
+              '>>> TOOL_REQUEST($toolCallRounds) ${tc.name} '
+              '${jsonEncode(tc.arguments)}');
           String toolResult;
           switch (tc.name) {
             case 'searchBooks':
@@ -505,6 +513,8 @@ class ChatState extends ChangeNotifier {
             default:
               toolResult = jsonEncode({'error': 'Unknown tool: ${tc.name}'});
           }
+          debugPrint('<<< TOOL_RESULT($toolCallRounds) ${tc.name}: '
+              '${toolResult.length > 500 ? '${toolResult.substring(0, 500)}...' : toolResult}');
           apiMessages.add({
             'role': 'tool',
             'tool_call_id': tc.id,
@@ -647,6 +657,7 @@ class ChatState extends ChangeNotifier {
 
   Future<String> _handleAppendBook(Map<String, dynamic> args) async {
     try {
+      args = BrainParser.normalizeToolArgs(args);
       final previousBrain = await _getBrain();
       final brain = await _firestore.getBrain();
       final update = BrainParser.appendBook(brain, args);
@@ -676,6 +687,7 @@ class ChatState extends ChangeNotifier {
 
   Future<String> _handleUpdateBook(Map<String, dynamic> args) async {
     try {
+      args = BrainParser.normalizeToolArgs(args);
       final targetTitle = args['targetTitle'] as String? ?? '';
       final bookJson = args['book'] as Map<String, dynamic>?;
       if (targetTitle.isEmpty || bookJson == null) {
@@ -708,6 +720,7 @@ class ChatState extends ChangeNotifier {
 
   Future<String> _handleDeleteBook(Map<String, dynamic> args) async {
     try {
+      args = BrainParser.normalizeToolArgs(args);
       final targetTitle = args['targetTitle'] as String? ?? '';
       if (targetTitle.isEmpty) {
         return "Error: targetTitle is required";
@@ -739,6 +752,7 @@ class ChatState extends ChangeNotifier {
 
   Future<String> _handlePatchBrain(Map<String, dynamic> args) async {
     try {
+      args = BrainParser.normalizeToolArgs(args);
       final targetSection = args['targetSection'] as String? ?? '';
       final replacementContent = args['replacementContent'];
       if (targetSection.isEmpty ||
@@ -787,6 +801,7 @@ class ChatState extends ChangeNotifier {
 
   Future<String> _handleLogObservation(Map<String, dynamic> args) async {
     try {
+      args = BrainParser.normalizeToolArgs(args);
       final brain = await _firestore.getBrain();
       final update = BrainParser.addObservation(brain, args);
       await _firestore.updateBrain(update.brain, update.log);

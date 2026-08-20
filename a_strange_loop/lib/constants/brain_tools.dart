@@ -242,16 +242,18 @@ class BrainTools {
           },
           'replacementContent': {
             'description':
-                'Complete new value. Type depends on targetSection:\n'
+                'Complete new value. Pass the value directly as an object, '
+                    'array, string, or null — never as a JSON-encoded string. '
+                    'Type depends on targetSection:\n'
                     '- Object: META, READER_PROFILE, READER_PROFILE.NARRATIVE_PREFERENCES, '
                     'READING_MODES, VOCABULARY, FAVORITE_AUTHORS, FAVORITE_BOOKS, '
                     'READER_BLIND_SPOTS, RECOMMENDATION_QUEUE\n'
                     '- Array: ACTIVE_QUESTIONS, READING_EVOLUTION, OBSERVATIONS\n'
                     '- String: READER_PROFILE.CORE_PHILOSOPHY\n'
                     '- Array of strings: READER_PROFILE.THINGS_I_CONSISTENTLY_LOVE\n'
-'- null: CURRENT_READING (to clear), or '
-'{book: "Title", hardcoverId?: "id", progress: "30%", '
-'readingStrategy: "...", notes: "..."} to set',
+                    '- null: CURRENT_READING (to clear), or '
+                    '{book: "Title", hardcoverId?: "id", progress: "30%", '
+                    'readingStrategy: "...", notes: "..."} to set',
           },
           'reason': {'type': 'string'},
           'evidence': {'type': 'string'},

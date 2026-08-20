@@ -274,6 +274,223 @@ void main() {
     });
   });
 
+  group('markdown-style key normalization', () {
+    test('patchBrain CURRENT_READING with MiMo capitalized keys updates progress', () {
+      final brainJson = minimalBrainJson();
+      final brain = jsonDecode(brainJson) as Map<String, dynamic>;
+      brain['currentReading'] = {
+        'book': 'Luminous',
+        'progress': '25%',
+        'readingStrategy': 'Egan mode: build the model, follow logical consequences',
+        'notes': 'Collection from peak era',
+        'hardcoverId': '635023',
+      };
+      final withCr = jsonEncode(brain);
+
+      final result = BrainParser.patchBrain(
+        withCr,
+        'CURRENT_READING',
+        {
+          'Book': 'Luminous',
+          'Progress': '30%',
+        },
+        reason: 'User reported reading progress update',
+        confidence: 1.0,
+      );
+
+      expect(result.log.length, 1);
+      expect(result.log[0].operation, 'PATCH');
+      final updated = jsonDecode(result.brain) as Map<String, dynamic>;
+      final cr = updated['currentReading'] as Map<String, dynamic>;
+      expect(cr['progress'], '30%');
+      expect(cr['book'], 'Luminous');
+      expect(cr['readingStrategy'],
+          'Egan mode: build the model, follow logical consequences');
+      expect(cr['hardcoverId'], '635023');
+    });
+
+    test('appendBook with markdown-style keys adds book', () {
+      final result = BrainParser.appendBook(minimalBrainJson(), {
+        'Title': 'The Dispossessed',
+        'Status': 'Finished',
+        'Rating': 5,
+        'Personal Significance': 'Sushi',
+        'Why It Matters': 'Political philosophy built as a civilization.',
+        'Hardcover Review': 'Ursula Le Guin at her most ambitious.',
+        'Hardcover Spoiler': false,
+      });
+
+      final updated = jsonDecode(result.brain) as Map<String, dynamic>;
+      final books = updated['books'] as List;
+      expect(books.length, 1);
+      expect(books[0]['title'], 'The Dispossessed');
+      expect(books[0]['status'], 'Finished');
+      expect(books[0]['rating'], 5);
+      expect(books[0]['personalSignificance'], 'Sushi');
+      expect(books[0]['whyItMatters'],
+          'Political philosophy built as a civilization.');
+      expect(books[0]['hardcoverReview'],
+          'Ursula Le Guin at her most ambitious.');
+    });
+
+    test('updateBook with markdown-style nested book keys replaces entry', () {
+      final brainJson = minimalBrainJson();
+      final brain = jsonDecode(brainJson) as Map<String, dynamic>;
+      brain['books'] = [
+        {
+          'title': 'Old Book',
+          'status': 'Reading',
+          'hardcoverId': '123',
+          'author': 'Some Author',
+        }
+      ];
+      final withBooks = jsonEncode(brain);
+
+      final result = BrainParser.updateBook(withBooks, 'Old Book', {
+        'Title': 'Old Book',
+        'Status': 'Finished',
+        'Rating': 5,
+        'Personal Significance': 'Sushi',
+      });
+
+      final updated = jsonDecode(result.brain) as Map<String, dynamic>;
+      final books = updated['books'] as List;
+      expect(books.length, 1);
+      expect(books[0]['status'], 'Finished');
+      expect(books[0]['rating'], 5);
+      expect(books[0]['personalSignificance'], 'Sushi');
+      expect(books[0]['hardcoverId'], '123');
+    });
+
+    test('addObservation with markdown-style keys adds observation', () {
+      final result = BrainParser.addObservation(minimalBrainJson(), {
+        'Evidence': 'User mentioned enjoying short chapters',
+        'Hypothesis': 'User prefers concise writing',
+        'Confidence': 0.6,
+        'Logged': '2026-08-01',
+      });
+
+      final updated = jsonDecode(result.brain) as Map<String, dynamic>;
+      final obs = updated['observations'] as List;
+      expect(obs.length, 1);
+      expect(obs[0]['hypothesis'], 'User prefers concise writing');
+      expect(obs[0]['confidence'], 0.6);
+      expect(obs[0]['logged'], '2026-08-01');
+    });
+
+    test('patchBrain RECOMMENDATION_QUEUE with markdown keys', () {
+      final brainJson = minimalBrainJson();
+      final brain = jsonDecode(brainJson) as Map<String, dynamic>;
+      brain['recommendationQueue'] = {
+        'highestPriority': [
+          {'book': 'The Dispossessed', 'reason': 'Old reason'},
+        ],
+        'highConfidence': [],
+        'future': [],
+      };
+      final withQueue = jsonEncode(brain);
+
+      final result = BrainParser.patchBrain(
+        withQueue,
+        'RECOMMENDATION_QUEUE',
+        {
+          'Highest Priority': [
+            {'Book': 'The Dispossessed', 'Reason': 'New reason'},
+          ],
+          'High Confidence': [],
+          'Future': [],
+        },
+        reason: 'User requested',
+        confidence: 1.0,
+      );
+
+      final updated = jsonDecode(result.brain) as Map<String, dynamic>;
+      final queue = updated['recommendationQueue'] as Map<String, dynamic>;
+      final hp = queue['highestPriority'] as List;
+      expect(hp.length, 1);
+      expect(hp[0]['book'], 'The Dispossessed');
+      expect(hp[0]['reason'], 'New reason');
+    });
+
+    test('patchBrain CURRENT_READING with JSON-string replacementContent', () {
+      final brainJson = minimalBrainJson();
+      final brain = jsonDecode(brainJson) as Map<String, dynamic>;
+      brain['currentReading'] = {
+        'book': 'Luminous',
+        'progress': '25%',
+        'readingStrategy': 'Egan mode: build the model, follow logical consequences',
+        'notes': 'Collection from peak era',
+        'hardcoverId': '635023',
+      };
+      final withCr = jsonEncode(brain);
+
+      final result = BrainParser.patchBrain(
+        withCr,
+        'CURRENT_READING',
+        jsonEncode({
+          'book': 'Luminous',
+          'hardcoverId': '635023',
+          'progress': '30%',
+          'readingStrategy':
+              'Egan mode: build the model, follow logical consequences',
+          'notes': 'Collection from peak era',
+        }),
+        reason: 'Progress update from 25% to 30% on Luminous',
+        confidence: 1.0,
+      );
+
+      expect(result.log.length, 1);
+      final updated = jsonDecode(result.brain) as Map<String, dynamic>;
+      final cr = updated['currentReading'] as Map<String, dynamic>;
+      expect(cr['progress'], '30%');
+      expect(cr['book'], 'Luminous');
+      expect(cr['hardcoverId'], '635023');
+    });
+
+    test('patchBrain CURRENT_READING with JSON-string null clears it', () {
+      final brainJson = minimalBrainJson();
+      final brain = jsonDecode(brainJson) as Map<String, dynamic>;
+      brain['currentReading'] = {
+        'book': 'Old Read',
+        'progress': '50%',
+        'readingStrategy': '',
+        'notes': '',
+      };
+      final withCr = jsonEncode(brain);
+
+      final result = BrainParser.patchBrain(
+        withCr,
+        'CURRENT_READING',
+        jsonEncode(null),
+        reason: 'Book finished',
+        confidence: 1.0,
+      );
+
+      final updated = jsonDecode(result.brain) as Map<String, dynamic>;
+      expect(updated['currentReading'], isNull);
+    });
+
+    test('normalizeToolArgs returns canonical keys recursively', () {
+      final normalized = BrainParser.normalizeToolArgs({
+        'targetSection': 'CURRENT_READING',
+        'replacementContent': {
+          'Book': 'X',
+          'Progress': '10%',
+          'Hardcover ID': '42',
+        },
+        'reason': 'Test',
+        'confidence': 1.0,
+      });
+
+      expect(normalized['targetSection'], 'CURRENT_READING');
+      expect(normalized['reason'], 'Test');
+      final rc = normalized['replacementContent'] as Map<String, dynamic>;
+      expect(rc['book'], 'X');
+      expect(rc['progress'], '10%');
+      expect(rc['hardcoverId'], '42');
+    });
+  });
+
   group('BrainParser.applyBlocks (legacy)', () {
     test('APPEND_BOOK adds book', () {
       final result = BrainParser.applyBlocks(minimalBrainJson(), [

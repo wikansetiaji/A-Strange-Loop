@@ -79,6 +79,15 @@ class AIService {
 
   bool get _isMimo => ModelSettings.isMimoModel(_model);
 
+  int get _mimoCompletionBudget =>
+      _model == 'mimo-v2.5-pro' ? 131072 : 32768;
+
+  int get _summarizeBudget => _isMimo ? 8192 : 2048;
+
+  int get _streamingBudget => _isMimo ? _mimoCompletionBudget : 4096;
+
+  int get _toolBudget => _isMimo ? _mimoCompletionBudget : 8192;
+
   static Map<String, dynamic> _buildThinkingParam(String effort) {
     if (effort == 'disabled') return {'type': 'disabled'};
     return {'type': 'enabled'};
@@ -111,7 +120,7 @@ class AIService {
         {'role': 'user', 'content': textToSummarize},
       ],
       'temperature': 0.3,
-      _tokenParam: 2048,
+      _tokenParam: _summarizeBudget,
       'stream': false,
       'thinking': _thinking,
       if (!_isMimo && _reasoningEffort != null)
@@ -182,7 +191,7 @@ class AIService {
         {'role': 'user', 'content': prompt},
       ],
       'temperature': 0.7,
-      _tokenParam: 4096,
+      _tokenParam: _streamingBudget,
       'stream': true,
       'thinking': _thinking,
       if (!_isMimo && _reasoningEffort != null)
@@ -240,7 +249,7 @@ class AIService {
       'model': _model,
       'messages': messages,
       'temperature': 0.7,
-      _tokenParam: 8192,
+      _tokenParam: _toolBudget,
       'stream': true,
       'thinking': _thinking,
       if (!_isMimo && _reasoningEffort != null)
@@ -297,13 +306,15 @@ class AIService {
             final acc = toolAccumulators.putIfAbsent(
                 index, () => _ToolCallAccumulator());
             if (tcMap.containsKey('id')) {
-              acc.id = tcMap['id'] as String?;
+              final id = tcMap['id'] as String?;
+              if (id != null) acc.id = id;
             }
             if (tcMap.containsKey('function')) {
               final func = tcMap['function'] as Map<String, dynamic>?;
               if (func != null) {
                 if (func.containsKey('name')) {
-                  acc.name = func['name'] as String?;
+                  final name = func['name'] as String?;
+                  if (name != null) acc.name = name;
                 }
                 if (func['arguments'] != null) {
                   acc.arguments.write(func['arguments'] as String);

@@ -44,6 +44,10 @@ class BrainUpdate {
 }
 
 class BrainParser {
+  static Map<String, dynamic> normalizeToolArgs(
+          Map<String, dynamic> args) =>
+      _normalizeKeys(args);
+
   static BrainUpdate appendBook(
       String brainJson, Map<String, dynamic> data) {
     final log = <PatchLogEntry>[];
@@ -54,7 +58,7 @@ class BrainParser {
       return BrainUpdate(brain: brainJson, log: log);
     }
 
-    final book = Book.fromJson(data);
+    final book = Book.fromJson(_normalizeKeys(data));
     brain.books.add(book);
     log.add(PatchLogEntry(operation: 'APPEND_BOOK', target: book.title));
 
@@ -80,7 +84,7 @@ class BrainParser {
       final existing = brain.books[idx];
       final merged = Book.fromJson({
         ...existing.toJson(),
-        ...data,
+        ..._normalizeKeys(data),
       });
       brain.books[idx] = merged;
       log.add(PatchLogEntry(
@@ -152,10 +156,12 @@ class BrainParser {
       return BrainUpdate(brain: brainJson, log: log);
     }
 
-    final evidence = data['evidence'] as String? ?? '';
-    final hypothesis = data['hypothesis'] as String? ?? '';
-    final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.0;
-    final logged = data['logged'] as String? ?? '';
+    final normalizedData = _normalizeKeys(data);
+    final evidence = normalizedData['evidence'] as String? ?? '';
+    final hypothesis = normalizedData['hypothesis'] as String? ?? '';
+    final confidence =
+        (normalizedData['confidence'] as num?)?.toDouble() ?? 0.0;
+    final logged = normalizedData['logged'] as String? ?? '';
 
     final matching = <int>[];
     for (var i = 0; i < brain.observations.length; i++) {
@@ -207,10 +213,11 @@ class BrainParser {
     }
 
     for (final block in blocks) {
+      final jsonData = _normalizeKeys(block.jsonData);
       switch (block.type) {
         case BlockType.appendBook:
           try {
-            final book = Book.fromJson(block.jsonData);
+            final book = Book.fromJson(jsonData);
             brain.books.add(book);
             log.add(PatchLogEntry(
                 operation: 'APPEND_BOOK', target: book.title));
@@ -220,8 +227,8 @@ class BrainParser {
         case BlockType.updateBook:
           try {
             final targetTitle =
-                block.jsonData['targetTitle'] as String? ?? '';
-            final bookJson = block.jsonData['book'] as Map<String, dynamic>?;
+                jsonData['targetTitle'] as String? ?? '';
+            final bookJson = jsonData['book'] as Map<String, dynamic>?;
             if (targetTitle.isEmpty || bookJson == null) break;
             final idx = brain.books
                 .indexWhere((b) => b.title == targetTitle);
@@ -241,7 +248,7 @@ class BrainParser {
         case BlockType.deleteBook:
           try {
             final targetTitle =
-                block.jsonData['targetTitle'] as String? ?? '';
+                jsonData['targetTitle'] as String? ?? '';
             if (targetTitle.isEmpty) break;
             brain.books.removeWhere((b) => b.title == targetTitle);
             log.add(PatchLogEntry(
@@ -252,14 +259,14 @@ class BrainParser {
         case BlockType.patch:
           try {
             final targetSection =
-                (block.jsonData['targetSection'] ??
-                        block.jsonData['target']) as String? ??
+                (jsonData['targetSection'] ??
+                        jsonData['target']) as String? ??
                     '';
-            final replacementContent = block.jsonData['replacementContent'] ??
-                block.jsonData['replace'];
-            final reason = block.jsonData['reason'] as String?;
+            final replacementContent = jsonData['replacementContent'] ??
+                jsonData['replace'];
+            final reason = jsonData['reason'] as String?;
             final confidence =
-                (block.jsonData['confidence'] as num?)?.toDouble();
+                (jsonData['confidence'] as num?)?.toDouble();
             if (targetSection.isEmpty) break;
             if (replacementContent == null &&
                 targetSection != 'CURRENT_READING') {
@@ -281,13 +288,13 @@ class BrainParser {
         case BlockType.observation:
           try {
             final evidence =
-                block.jsonData['evidence'] as String? ?? '';
+                jsonData['evidence'] as String? ?? '';
             final hypothesis =
-                block.jsonData['hypothesis'] as String? ?? '';
+                jsonData['hypothesis'] as String? ?? '';
             final confidence =
-                (block.jsonData['confidence'] as num?)?.toDouble() ?? 0.0;
+                (jsonData['confidence'] as num?)?.toDouble() ?? 0.0;
             final logged =
-                block.jsonData['logged'] as String? ?? '';
+                jsonData['logged'] as String? ?? '';
 
             final matching = <int>[];
             for (var i = 0; i < brain.observations.length; i++) {
@@ -353,6 +360,15 @@ class BrainParser {
 
   static bool _applyJsonPatch(
       Brain brain, String targetSection, dynamic replacementContent) {
+    if (replacementContent is String &&
+        replacementContent.trim().isNotEmpty) {
+      try {
+        replacementContent = jsonDecode(replacementContent);
+      } catch (_) {}
+    }
+    if (replacementContent is Map<String, dynamic>) {
+      replacementContent = _normalizeKeys(replacementContent);
+    }
     final parts = targetSection.split('.');
     final section = parts[0];
     final subsection = parts.length > 1 ? parts.sublist(1).join('_') : null;
@@ -522,6 +538,82 @@ class BrainParser {
         break;
     }
     return false;
+  }
+
+  static const Map<String, String> _keyAliases = {
+    'Name': 'name',
+    'Started Reading Seriously': 'startedReadingSeriously',
+    'Primary Goal': 'primaryGoal',
+    'Core Philosophy': 'corePhilosophy',
+    'Things I Consistently Love': 'thingsIConsistentlyLove',
+    'Narrative Preferences': 'narrativePreferences',
+    'Very High': 'veryHigh',
+    'High': 'high',
+    'Medium': 'medium',
+    'Low': 'low',
+    'Definition': 'definition',
+    'Examples': 'examples',
+    'Tier S': 'tierS',
+    'Tier A': 'tierA',
+    'Ranked': 'ranked',
+    'Favorite Nonfiction': 'favoriteNonfiction',
+    'Favorite Short Story Collection': 'favoriteShortStoryCollection',
+    'Things I Probably Overvalue': 'overvalued',
+    'Things I Probably Undervalue': 'undervalued',
+    'Books That Changed My Mind': 'booksThatChangedMyMind',
+    'Year': 'year',
+    'Insight': 'insight',
+    'Book': 'book',
+    'Title': 'title',
+    'Status': 'status',
+    'Rating': 'rating',
+    'Progress': 'progress',
+    'Personal Significance': 'personalSignificance',
+    'Why It Matters': 'whyItMatters',
+    'Current Impression': 'currentImpression',
+    'Reading Strategy': 'readingStrategy',
+    'Current Reading Strategy': 'readingStrategy',
+    'Current Notes': 'notes',
+    'Notes': 'notes',
+    'Abandonment Reason': 'abandonmentReason',
+    'Hardcover ID': 'hardcoverId',
+    'Author': 'author',
+    'Cover': 'coverUrl',
+    'Cover Url': 'coverUrl',
+    'Pages': 'pages',
+    'Hardcover URL': 'hardcoverUrl',
+    'Hardcover Url': 'hardcoverUrl',
+    'Date Added': 'dateAdded',
+    'Date Read': 'dateRead',
+    'Hardcover Status': 'hardcoverStatus',
+    'Hardcover Review': 'hardcoverReview',
+    'Hardcover Spoiler': 'hardcoverSpoiler',
+    'Genres': 'genres',
+    'Highest Priority': 'highestPriority',
+    'High Confidence': 'highConfidence',
+    'Future': 'future',
+    'Reason': 'reason',
+    'Evidence': 'evidence',
+    'Hypothesis': 'hypothesis',
+    'Confidence': 'confidence',
+    'Logged': 'logged',
+  };
+
+  static Map<String, dynamic> _normalizeKeys(Map<String, dynamic> data) {
+    final result = <String, dynamic>{};
+    for (final entry in data.entries) {
+      final alias = _keyAliases[entry.key];
+      final key = alias ?? entry.key;
+      if (alias != null && result.containsKey(key)) continue;
+      result[key] = _normalizeValue(entry.value);
+    }
+    return result;
+  }
+
+  static dynamic _normalizeValue(dynamic value) {
+    if (value is Map<String, dynamic>) return _normalizeKeys(value);
+    if (value is List) return value.map(_normalizeValue).toList();
+    return value;
   }
 
   static const _stopWords = {
